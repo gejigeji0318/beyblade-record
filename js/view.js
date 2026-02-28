@@ -169,21 +169,33 @@ const View = {
 
     noData.classList.add('hidden');
 
-    tbody.innerHTML = battles.map(b => {
+    this.filteredBattles = battles;
+
+    tbody.innerHTML = battles.map((b, idx) => {
       const date = new Date(b.timestamp);
       const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
       const stadium = STADIUMS[b.stadium] || b.stadium;
-      const typeName = b.type === 'individual' ? '個人戦' : 'チーム戦';
+      let typeName = 'チーム戦';
+      if (b.type === 'individual') {
+        typeName = b.battleFormat === '3on3' ? '3on3' : '1on1';
+      }
 
       let matchup, score, winner, beyMatchup;
 
       if (b.type === 'individual') {
+        const is3on3 = b.battleFormat === '3on3';
         matchup = `${b.players.player1.name}<br>vs<br>${b.players.player2.name}`;
         score = `${b.finalScore.player1} - ${b.finalScore.player2}`;
         winner = b.winner;
-        const bey1 = this.beyToShortString(b.players.player1.bey);
-        const bey2 = this.beyToShortString(b.players.player2.bey);
-        beyMatchup = `${bey1}<br>vs<br>${bey2}`;
+        if (is3on3 && b.players.player1.beys) {
+          const beys1 = b.players.player1.beys.map(b => this.beyToShortString(b)).join('<br>');
+          const beys2 = b.players.player2.beys.map(b => this.beyToShortString(b)).join('<br>');
+          beyMatchup = `${beys1}<br>vs<br>${beys2}`;
+        } else {
+          const bey1 = this.beyToShortString(b.players.player1.bey);
+          const bey2 = this.beyToShortString(b.players.player2.bey);
+          beyMatchup = `${bey1}<br>vs<br>${bey2}`;
+        }
       } else {
         matchup = `${b.teamA.join(',')}<br>vs<br>${b.teamB.join(',')}`;
         const winsA = b.matches.filter(m => b.teamA.includes(m.winner)).length;
@@ -195,7 +207,7 @@ const View = {
         ).join('<br><br>');
       }
 
-      return `<tr>
+      return `<tr onclick="View.showDetail(${idx})">
         <td><span class="badge ${b.type === 'individual' ? 'badge-attack' : 'badge-stamina'}">${typeName}</span></td>
         <td style="font-size:0.8rem;">${stadium}</td>
         <td style="font-size:0.8rem;">${beyMatchup}</td>
@@ -203,9 +215,132 @@ const View = {
         <td>${score}</td>
         <td><span class="badge badge-win">${winner}</span></td>
         <td>${dateStr}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="View.deleteBattle('${b.id}')">削除</button></td>
+        <td><button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); View.deleteBattle('${b.id}')">削除</button></td>
       </tr>`;
     }).join('');
+  },
+
+  // 詳細モーダル表示
+  showDetail(idx) {
+    const b = this.filteredBattles[idx];
+    if (!b) return;
+
+    const date = new Date(b.timestamp);
+    const dateStr = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+    const stadium = STADIUMS[b.stadium] || b.stadium;
+
+    let html = '';
+
+    if (b.type === 'individual') {
+      const is3on3 = b.battleFormat === '3on3';
+      const formatLabel = is3on3 ? '3on3' : '1on1';
+
+      // ベイ情報
+      let beyHtml = '';
+      if (is3on3 && b.players.player1.beys) {
+        beyHtml = `
+          <div class="modal-value"><strong>${b.players.player1.name}:</strong></div>
+          ${b.players.player1.beys.map((bey, i) => `<div class="modal-value" style="padding-left:12px;">Bey${i + 1}: ${App.beyConfigToString(bey)}</div>`).join('')}
+          <div class="modal-value" style="margin-top:4px;"><strong>${b.players.player2.name}:</strong></div>
+          ${b.players.player2.beys.map((bey, i) => `<div class="modal-value" style="padding-left:12px;">Bey${i + 1}: ${App.beyConfigToString(bey)}</div>`).join('')}
+        `;
+      } else {
+        const bey1 = App.beyConfigToString(b.players.player1.bey);
+        const bey2 = App.beyConfigToString(b.players.player2.bey);
+        beyHtml = `
+          <div class="modal-value">${b.players.player1.name}: ${bey1}</div>
+          <div class="modal-value">${b.players.player2.name}: ${bey2}</div>
+        `;
+      }
+
+      html = `
+        <h3>${b.players.player1.name} vs ${b.players.player2.name}（${formatLabel}）</h3>
+        <div class="modal-section">
+          <div class="modal-label">スタジアム</div>
+          <div class="modal-value">${stadium}</div>
+        </div>
+        <div class="modal-section">
+          <div class="modal-label">使用ベイ</div>
+          ${beyHtml}
+        </div>
+        <div class="modal-section">
+          <div class="modal-label">スコア</div>
+          <div class="modal-value">${b.finalScore.player1} - ${b.finalScore.player2}　勝者: ${b.winner}</div>
+        </div>
+        <div class="modal-section">
+          <div class="modal-label">ラウンド詳細</div>
+          <ul class="modal-rounds">
+            ${(b.rounds || []).map((r, i) => {
+              let beyPairInfo = '';
+              if (is3on3) {
+                if (r.beyPairIndex !== undefined) {
+                  beyPairInfo = ` [Bey${r.beyPairIndex + 1} vs Bey${r.beyPairIndex + 1}]`;
+                } else if (r.beyPairP1 !== undefined && r.beyPairP2 !== undefined) {
+                  beyPairInfo = ` [Bey${r.beyPairP1 + 1} vs Bey${r.beyPairP2 + 1}]`;
+                }
+              }
+              return `<li>
+                <span class="badge badge-win" style="min-width:32px;text-align:center;">R${i + 1}</span>
+                <span>${r.winnerName}${beyPairInfo}</span>
+                <span style="color:var(--text-muted);">${DEFAULT_FINISH_POINTS[r.finishType] ? DEFAULT_FINISH_POINTS[r.finishType].name : r.finishType} (+${r.points})</span>
+              </li>`;
+            }).join('')}
+          </ul>
+        </div>
+        <div class="modal-section">
+          <div class="modal-label">日時</div>
+          <div class="modal-value">${dateStr}</div>
+        </div>`;
+    } else {
+      html = `
+        <h3>チーム戦</h3>
+        <div class="modal-section">
+          <div class="modal-label">スタジアム</div>
+          <div class="modal-value">${stadium}</div>
+        </div>
+        <div class="modal-section">
+          <div class="modal-label">チームA</div>
+          <div class="modal-value">${b.teamA.join(', ')}</div>
+          <div class="modal-label" style="margin-top:8px;">チームB</div>
+          <div class="modal-value">${b.teamB.join(', ')}</div>
+        </div>
+        <div class="modal-section">
+          <div class="modal-label">勝者</div>
+          <div class="modal-value">チーム${b.winnerTeam}</div>
+        </div>`;
+
+      (b.matches || []).forEach((m, mi) => {
+        const beyA = App.beyConfigToString(m.playerA.bey);
+        const beyB = App.beyConfigToString(m.playerB.bey);
+        html += `
+        <div class="modal-section">
+          <div class="modal-label">マッチ${mi + 1}: ${m.playerA.name} vs ${m.playerB.name}</div>
+          <div class="modal-value" style="font-size:0.8rem;margin-bottom:4px;">${m.playerA.name}: ${beyA}<br>${m.playerB.name}: ${beyB}</div>
+          <div class="modal-value">スコア: ${m.scores.a} - ${m.scores.b}　勝者: ${m.winner}</div>
+          <ul class="modal-rounds">
+            ${(m.rounds || []).map((r, i) => `<li>
+              <span class="badge badge-win" style="min-width:32px;text-align:center;">R${i + 1}</span>
+              <span>${r.winnerName}</span>
+              <span style="color:var(--text-muted);">${DEFAULT_FINISH_POINTS[r.finishType] ? DEFAULT_FINISH_POINTS[r.finishType].name : r.finishType} (+${r.points})</span>
+            </li>`).join('')}
+          </ul>
+        </div>`;
+      });
+
+      html += `
+        <div class="modal-section">
+          <div class="modal-label">日時</div>
+          <div class="modal-value">${dateStr}</div>
+        </div>`;
+    }
+
+    document.getElementById('modalContent').innerHTML = html;
+    document.getElementById('modalOverlay').classList.remove('hidden');
+  },
+
+  // 詳細モーダル閉じる
+  closeDetail() {
+    document.getElementById('modalOverlay').classList.add('hidden');
   },
 
   // 戦績削除

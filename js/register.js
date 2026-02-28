@@ -2,10 +2,21 @@
 const Register = {
   stadium: null,
   battleType: null,
+  battleFormat: '1on1',
   finishPoints: null,
   winCondition: DEFAULT_WIN_CONDITION,
   rounds: [],
   scores: { player1: 0, player2: 0 },
+
+  // 3on3用
+  player1Beys: [],
+  player2Beys: [],
+  beyPairIndex: 0,
+  beyFreeSelect: false,
+  selectedBeyP1: null,
+  selectedBeyP2: null,
+  usedBeysP1: [],
+  usedBeysP2: [],
 
   // チーム戦用
   teamA: [],
@@ -21,15 +32,30 @@ const Register = {
   init() {
     this.stadium = null;
     this.battleType = null;
+    this.battleFormat = '1on1';
     this.rounds = [];
     this.scores = { player1: 0, player2: 0 };
+    this.selectedWinner = null;
+    this.player1Beys = [];
+    this.player2Beys = [];
+    this.beyPairIndex = 0;
+    this.beyFreeSelect = false;
+    this.selectedBeyP1 = null;
+    this.selectedBeyP2 = null;
+    this.usedBeysP1 = [];
+    this.usedBeysP2 = [];
     this.teamA = [];
     this.teamB = [];
+    this.teamARegular = [];
+    this.teamBRegular = [];
+    this.teamAOtherActive = false;
+    this.teamBOtherActive = false;
     this.teamMatches = [];
     this.currentMatchIndex = 0;
     this.teamBeyConfigs = {};
     this.teamScores = { a: 0, b: 0 };
     this.teamRounds = [];
+    this.teamSelectedWinner = null;
     this.finishPoints = JSON.parse(JSON.stringify(DEFAULT_FINISH_POINTS));
     this.winCondition = DEFAULT_WIN_CONDITION;
 
@@ -50,10 +76,18 @@ const Register = {
     // バトル進行データのみリセット（ベイ構成・ユーザー選択は保持）
     this.rounds = [];
     this.scores = { player1: 0, player2: 0 };
+    this.selectedWinner = null;
+    this.beyPairIndex = 0;
+    this.beyFreeSelect = false;
+    this.selectedBeyP1 = null;
+    this.selectedBeyP2 = null;
+    this.usedBeysP1 = [];
+    this.usedBeysP2 = [];
     this.teamMatches = [];
     this.currentMatchIndex = 0;
     this.teamScores = { a: 0, b: 0 };
     this.teamRounds = [];
+    this.teamSelectedWinner = null;
     this.finishPoints = JSON.parse(JSON.stringify(DEFAULT_FINISH_POINTS));
     this.winCondition = DEFAULT_WIN_CONDITION;
 
@@ -120,11 +154,47 @@ const Register = {
 
     if (type === 'individual') {
       document.getElementById('registerIndividual').classList.remove('hidden');
-      App.createBeyForm('player1BeyForm', 'p1');
-      App.createBeyForm('player2BeyForm', 'p2');
+      this.battleFormat = '1on1';
+      this.selectBattleFormat('1on1');
     } else {
       document.getElementById('registerTeam').classList.remove('hidden');
       this.renderTeamSelect();
+    }
+  },
+
+  // バトル形式選択（1on1 / 3on3）
+  selectBattleFormat(format) {
+    this.battleFormat = format;
+
+    // ボタンのアクティブ状態
+    document.querySelectorAll('.format-selector .select-option').forEach(el => {
+      el.classList.toggle('active', el.textContent === format);
+    });
+
+    // 3on3: 勝利条件を4点固定
+    const winCondEl = document.getElementById('winCondition');
+    const is3on3 = format === '3on3';
+    if (is3on3) {
+      winCondEl.value = 4;
+      winCondEl.disabled = true;
+    } else {
+      winCondEl.disabled = false;
+    }
+
+    // 1on1 / 3on3 のベイフォーム切替
+    document.getElementById('player1Bey').classList.toggle('hidden', is3on3);
+    document.getElementById('player2Bey').classList.toggle('hidden', is3on3);
+    document.getElementById('player1Bey3on3').classList.toggle('hidden', !is3on3);
+    document.getElementById('player2Bey3on3').classList.toggle('hidden', !is3on3);
+
+    if (is3on3) {
+      for (let i = 0; i < 3; i++) {
+        App.createBeyForm(`p1_3on3_${i}_form`, `p1_3on3_${i}`);
+        App.createBeyForm(`p2_3on3_${i}_form`, `p2_3on3_${i}`);
+      }
+    } else {
+      App.createBeyForm('player1BeyForm', 'p1');
+      App.createBeyForm('player2BeyForm', 'p2');
     }
   },
 
@@ -132,11 +202,16 @@ const Register = {
   renderTeamSelect() {
     this.teamA = [];
     this.teamB = [];
+    this.teamARegular = [];
+    this.teamBRegular = [];
+    this.teamAOtherActive = false;
+    this.teamBOtherActive = false;
     const renderGrid = (containerId, team) => {
       const container = document.getElementById(containerId);
       container.innerHTML = USERS.map(user =>
         `<div class="user-btn" onclick="Register.toggleTeamMember('${team}', '${user}', this)">${user}</div>`
-      ).join('');
+      ).join('') +
+        `<div class="user-btn" onclick="Register.toggleTeamMember('${team}', 'その他', this)">その他</div>`;
     };
     renderGrid('teamASelect', 'A');
     renderGrid('teamBSelect', 'B');
@@ -145,31 +220,71 @@ const Register = {
 
   // チームメンバー選択トグル
   toggleTeamMember(team, user, el) {
-    const arr = team === 'A' ? this.teamA : this.teamB;
-    const otherArr = team === 'A' ? this.teamB : this.teamA;
+    const isOther = user === 'その他';
 
-    // 相手チームに既にいる場合は無視
-    if (otherArr.includes(user)) {
-      App.showToast('このプレイヤーは相手チームに選択されています', 'error');
-      return;
-    }
-
-    const idx = arr.indexOf(user);
-    if (idx > -1) {
-      arr.splice(idx, 1);
-      el.classList.remove('active');
+    if (isOther) {
+      // 「その他」トグル：残りスロットをその他で埋める
+      if (team === 'A') {
+        this.teamAOtherActive = !this.teamAOtherActive;
+        el.classList.toggle('active', this.teamAOtherActive);
+      } else {
+        this.teamBOtherActive = !this.teamBOtherActive;
+        el.classList.toggle('active', this.teamBOtherActive);
+      }
     } else {
-      if (arr.length >= 3) {
-        App.showToast('3人まで選択可能です', 'error');
+      const regularArr = team === 'A' ? this.teamARegular : this.teamBRegular;
+      const otherTeamRegular = team === 'A' ? this.teamBRegular : this.teamARegular;
+
+      // 相手チームに既にいる場合は無視
+      if (otherTeamRegular.includes(user)) {
+        App.showToast('このプレイヤーは相手チームに選択されています', 'error');
         return;
       }
-      arr.push(user);
-      el.classList.add('active');
+
+      const idx = regularArr.indexOf(user);
+      if (idx > -1) {
+        regularArr.splice(idx, 1);
+        el.classList.remove('active');
+      } else {
+        if (regularArr.length >= 3) {
+          App.showToast('3人まで選択可能です', 'error');
+          return;
+        }
+        regularArr.push(user);
+        el.classList.add('active');
+      }
+    }
+
+    this.updateTeamArrays();
+  },
+
+  // チーム配列の更新（通常メンバー＋その他で埋める）
+  updateTeamArrays() {
+    // チームA構築
+    this.teamA = [...this.teamARegular];
+    if (this.teamAOtherActive) {
+      let count = 1;
+      while (this.teamA.length < 3) {
+        this.teamA.push(`その他${count}`);
+        count++;
+      }
+    }
+
+    // チームB構築
+    this.teamB = [...this.teamBRegular];
+    if (this.teamBOtherActive) {
+      let count = 1;
+      while (this.teamB.length < 3) {
+        this.teamB.push(`その他${count}`);
+        count++;
+      }
     }
 
     // 両チーム3人揃ったらベイ構成表示
     if (this.teamA.length === 3 && this.teamB.length === 3) {
       this.renderTeamBeyConfigs();
+    } else {
+      document.getElementById('teamBeyConfigs').classList.add('hidden');
     }
   },
 
@@ -201,7 +316,7 @@ const Register = {
 
   // バトル開始（個人戦）
   startBattle() {
-    this.winCondition = parseInt(document.getElementById('winCondition').value) || DEFAULT_WIN_CONDITION;
+    this.winCondition = this.battleFormat === '3on3' ? 4 : (parseInt(document.getElementById('winCondition').value) || DEFAULT_WIN_CONDITION);
 
     const p1Name = document.getElementById('player1Select').value;
     const p2Name = this.getPlayer2Name();
@@ -215,14 +330,44 @@ const Register = {
       return;
     }
 
-    // ベイ構成バリデーション
-    const err1 = App.validateBeyConfig('p1');
-    if (err1) { App.showToast(`P1: ${err1}`, 'error'); return; }
-    const err2 = App.validateBeyConfig('p2');
-    if (err2) { App.showToast(`P2: ${err2}`, 'error'); return; }
+    if (this.battleFormat === '3on3') {
+      // 3on3: 6ベイのバリデーション
+      for (let i = 0; i < 3; i++) {
+        const err1 = App.validateBeyConfig(`p1_3on3_${i}`);
+        if (err1) { App.showToast(`P1 Bey${i + 1}: ${err1}`, 'error'); return; }
+        const err2 = App.validateBeyConfig(`p2_3on3_${i}`);
+        if (err2) { App.showToast(`P2 Bey${i + 1}: ${err2}`, 'error'); return; }
+      }
+      this.player1Beys = [];
+      this.player2Beys = [];
+      for (let i = 0; i < 3; i++) {
+        this.player1Beys.push(App.getBeyConfig(`p1_3on3_${i}`));
+        this.player2Beys.push(App.getBeyConfig(`p2_3on3_${i}`));
+      }
+      // パーツ重複チェック
+      const dupErr1 = App.validateBeyDuplicates(this.player1Beys);
+      if (dupErr1) { App.showToast(`${p1Name}: ${dupErr1}`, 'error'); return; }
+      const dupErr2 = App.validateBeyDuplicates(this.player2Beys);
+      if (dupErr2) { App.showToast(`${p2Name}: ${dupErr2}`, 'error'); return; }
+      this.player1 = { name: p1Name };
+      this.player2 = { name: p2Name };
+      this.beyPairIndex = 0;
+      this.beyFreeSelect = false;
+      this.selectedBeyP1 = null;
+      this.selectedBeyP2 = null;
+      this.usedBeysP1 = [];
+      this.usedBeysP2 = [];
+    } else {
+      // 1on1: 既存のバリデーション
+      const err1 = App.validateBeyConfig('p1');
+      if (err1) { App.showToast(`P1: ${err1}`, 'error'); return; }
+      const err2 = App.validateBeyConfig('p2');
+      if (err2) { App.showToast(`P2: ${err2}`, 'error'); return; }
 
-    this.player1 = { name: p1Name, bey: App.getBeyConfig('p1') };
-    this.player2 = { name: p2Name, bey: App.getBeyConfig('p2') };
+      this.player1 = { name: p1Name, bey: App.getBeyConfig('p1') };
+      this.player2 = { name: p2Name, bey: App.getBeyConfig('p2') };
+    }
+
     this.rounds = [];
     this.scores = { player1: 0, player2: 0 };
 
@@ -237,6 +382,57 @@ const Register = {
 
   // バトルUIの描画
   renderBattleUI() {
+    // 3on3: 現在のベイ対戦表示
+    const matchupEl = document.getElementById('currentBeyMatchup');
+    const pickerEl = document.getElementById('beyPickerArea');
+    if (this.battleFormat === '3on3') {
+      if (this.beyFreeSelect) {
+        // 自由選択モード: ベイ対戦表示は選択後のみ、ピッカーはラウンド履歴の下
+        matchupEl.classList.toggle('hidden', this.selectedBeyP1 === null || this.selectedBeyP2 === null);
+        if (this.selectedBeyP1 !== null && this.selectedBeyP2 !== null) {
+          matchupEl.innerHTML = `
+            <div class="bey-matchup-label">Bey${this.selectedBeyP1 + 1} vs Bey${this.selectedBeyP2 + 1}</div>
+            <div class="bey-matchup-names">${App.beyConfigToString(this.player1Beys[this.selectedBeyP1])} vs ${App.beyConfigToString(this.player2Beys[this.selectedBeyP2])}</div>
+          `;
+        }
+
+        // ベイ選択ピッカー（ラウンド履歴の下）
+        const renderBeyPicker = (playerName, beys, playerKey, selectedIdx, usedBeys) => {
+          return `<div class="bey-picker">
+            <div class="bey-picker-label">${playerName} のベイを選択</div>
+            <div class="bey-picker-options">
+              ${beys.map((b, i) => {
+                const isUsed = usedBeys.includes(i);
+                const isActive = selectedIdx === i;
+                const cls = isUsed ? 'bey-picker-btn used' : (isActive ? 'bey-picker-btn active' : 'bey-picker-btn');
+                const onclick = isUsed ? '' : `onclick="Register.selectBeyForRound('${playerKey}', ${i})"`;
+                return `<div class="${cls}" ${onclick}>
+                  Bey${i + 1}: ${App.beyConfigToString(b)}${isUsed ? '（使用済み）' : ''}
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+        };
+        pickerEl.classList.remove('hidden');
+        pickerEl.innerHTML =
+          renderBeyPicker(this.player1.name, this.player1Beys, 'p1', this.selectedBeyP1, this.usedBeysP1) +
+          renderBeyPicker(this.player2.name, this.player2Beys, 'p2', this.selectedBeyP2, this.usedBeysP2);
+      } else {
+        // 順番通りモード（R1〜R3）
+        matchupEl.classList.remove('hidden');
+        const bey1 = this.player1Beys[this.beyPairIndex];
+        const bey2 = this.player2Beys[this.beyPairIndex];
+        matchupEl.innerHTML = `
+          <div class="bey-matchup-label">Bey${this.beyPairIndex + 1} vs Bey${this.beyPairIndex + 1}</div>
+          <div class="bey-matchup-names">${App.beyConfigToString(bey1)} vs ${App.beyConfigToString(bey2)}</div>
+        `;
+        pickerEl.classList.add('hidden');
+      }
+    } else {
+      matchupEl.classList.add('hidden');
+      pickerEl.classList.add('hidden');
+    }
+
     // スコアボード
     const sb = document.getElementById('scoreboard');
     const p1Win = this.scores.player1 >= this.winCondition;
@@ -255,47 +451,117 @@ const Register = {
 
     // ラウンド履歴
     const list = document.getElementById('roundList');
-    list.innerHTML = this.rounds.map((r, i) =>
-      `<li class="round-item">
+    list.innerHTML = this.rounds.map((r, i) => {
+      let beyLabel = '';
+      if (this.battleFormat === '3on3') {
+        if (r.beyPairIndex !== undefined) {
+          beyLabel = ` [Bey${r.beyPairIndex + 1} vs Bey${r.beyPairIndex + 1}]`;
+        } else if (r.beyPairP1 !== undefined && r.beyPairP2 !== undefined) {
+          beyLabel = ` [Bey${r.beyPairP1 + 1} vs Bey${r.beyPairP2 + 1}]`;
+        }
+      }
+      return `<li class="round-item">
         <span class="round-number">R${i + 1}</span>
-        <span class="round-winner">${r.winnerName}</span>
+        <span class="round-winner">${r.winnerName}${beyLabel}</span>
         <span class="round-finish">${this.finishPoints[r.finishType].name} (+${r.points})</span>
-      </li>`
-    ).join('');
+      </li>`;
+    }).join('');
 
-    // 勝者選択
-    const winnerSelect = document.getElementById('roundWinner');
-    winnerSelect.innerHTML = `
-      <option value="player1">${this.player1.name}</option>
-      <option value="player2">${this.player2.name}</option>
+    // 勝者選択ボタン
+    const winnerBtns = document.getElementById('roundWinnerButtons');
+    winnerBtns.innerHTML = `
+      <button class="btn ${this.selectedWinner === 'player1' ? 'btn-primary' : 'btn-outline'}" onclick="Register.selectRoundWinner('player1')">${this.player1.name}</button>
+      <button class="btn ${this.selectedWinner === 'player2' ? 'btn-primary' : 'btn-outline'}" onclick="Register.selectRoundWinner('player2')">${this.player2.name}</button>
     `;
 
-    // フィニッシュボタン
+    // フィニッシュボタン（勝者選択後に表示）
     const finishBtns = document.getElementById('finishButtons');
-    finishBtns.innerHTML = Object.entries(this.finishPoints).map(([key, data]) =>
-      `<button class="finish-btn" onclick="Register.recordRound('${key}')">
-        ${data.name}
-        <span class="finish-points">+${data.points}点</span>
-      </button>`
-    ).join('');
+    if (this.selectedWinner) {
+      finishBtns.innerHTML = Object.entries(this.finishPoints).map(([key, data]) =>
+        `<button class="finish-btn" onclick="Register.recordRound('${key}')">
+          ${data.name}
+          <span class="finish-points">+${data.points}点</span>
+        </button>`
+      ).join('');
+    } else {
+      finishBtns.innerHTML = '';
+    }
 
     // バトル終了判定
     if (this.scores.player1 >= this.winCondition || this.scores.player2 >= this.winCondition) {
       document.getElementById('finishSelect').classList.add('hidden');
       this.showResult();
+    } else if (this.battleFormat === '3on3' && this.beyFreeSelect &&
+               (this.selectedBeyP1 === null || this.selectedBeyP2 === null)) {
+      // 自由選択モードでベイ未選択 → 勝者/フィニッシュを非表示
+      document.getElementById('finishSelect').classList.add('hidden');
     } else {
       document.getElementById('finishSelect').classList.remove('hidden');
     }
   },
 
+  // 個人戦の勝者選択
+  selectRoundWinner(winner) {
+    this.selectedWinner = winner;
+    this.renderBattleUI();
+  },
+
+  // 3on3: ラウンドごとのベイ選択
+  selectBeyForRound(playerKey, beyIndex) {
+    if (playerKey === 'p1') {
+      this.selectedBeyP1 = this.selectedBeyP1 === beyIndex ? null : beyIndex;
+    } else {
+      this.selectedBeyP2 = this.selectedBeyP2 === beyIndex ? null : beyIndex;
+    }
+    this.renderBattleUI();
+  },
+
   // ラウンド記録
   recordRound(finishType) {
-    const winner = document.getElementById('roundWinner').value;
+    const winner = this.selectedWinner;
     const points = this.finishPoints[finishType].points;
     const winnerName = winner === 'player1' ? this.player1.name : this.player2.name;
 
-    this.rounds.push({ winner, winnerName, finishType, points });
+    const round = { winner, winnerName, finishType, points };
+    if (this.battleFormat === '3on3') {
+      if (this.beyFreeSelect) {
+        round.beyPairP1 = this.selectedBeyP1;
+        round.beyPairP2 = this.selectedBeyP2;
+      } else {
+        round.beyPairIndex = this.beyPairIndex;
+      }
+    }
+
+    this.rounds.push(round);
     this.scores[winner] += points;
+    this.selectedWinner = null;
+
+    // 3on3: 勝利条件未達の場合、ベイペアを進める
+    if (this.battleFormat === '3on3' &&
+        this.scores.player1 < this.winCondition &&
+        this.scores.player2 < this.winCondition) {
+      if (this.beyFreeSelect) {
+        // 使用済みベイに追加
+        this.usedBeysP1.push(this.selectedBeyP1);
+        this.usedBeysP2.push(this.selectedBeyP2);
+        // 3つ全て使い切ったらリセット（次のサイクル）
+        if (this.usedBeysP1.length >= 3) {
+          this.usedBeysP1 = [];
+          this.usedBeysP2 = [];
+        }
+        this.selectedBeyP1 = null;
+        this.selectedBeyP2 = null;
+      } else {
+        this.beyPairIndex++;
+        if (this.beyPairIndex >= 3) {
+          // 最初のサイクル終了 → 自由選択モードに切替
+          this.beyFreeSelect = true;
+          this.selectedBeyP1 = null;
+          this.selectedBeyP2 = null;
+          App.showToast('自由選択モード: 各ラウンドでベイを選んでください');
+        }
+      }
+    }
 
     this.renderBattleUI();
   },
@@ -312,10 +578,24 @@ const Register = {
       <p>${this.scores.player1} - ${this.scores.player2}</p>
     `;
 
-    document.getElementById('battleResultDetail').innerHTML = `
-      <div style="font-size:0.85rem;color:var(--text-secondary);">
+    let beyInfo = '';
+    if (this.battleFormat === '3on3') {
+      beyInfo = `
+        <p><strong>${this.player1.name}:</strong></p>
+        ${this.player1Beys.map((b, i) => `<p style="padding-left:12px;">Bey${i + 1}: ${App.beyConfigToString(b)}</p>`).join('')}
+        <p><strong>${this.player2.name}:</strong></p>
+        ${this.player2Beys.map((b, i) => `<p style="padding-left:12px;">Bey${i + 1}: ${App.beyConfigToString(b)}</p>`).join('')}
+      `;
+    } else {
+      beyInfo = `
         <p><strong>${winner.name}:</strong> ${App.beyConfigToString(winner.bey)}</p>
         <p><strong>${loser.name}:</strong> ${App.beyConfigToString(loser.bey)}</p>
+      `;
+    }
+
+    document.getElementById('battleResultDetail').innerHTML = `
+      <div style="font-size:0.85rem;color:var(--text-secondary);">
+        ${beyInfo}
         <p><strong>スタジアム:</strong> ${STADIUMS[this.stadium]}</p>
         <p><strong>ラウンド数:</strong> ${this.rounds.length}</p>
       </div>
@@ -337,11 +617,23 @@ const Register = {
       if (errB) { App.showToast(`チームB ${this.teamB[i]}: ${errB}`, 'error'); return; }
     }
 
-    // ベイ構成を保存
+    // ベイ構成を保存（チーム識別付きキーで衝突回避）
+    const teamABeys = [];
+    const teamBBeys = [];
     for (let i = 0; i < 3; i++) {
-      this.teamBeyConfigs[this.teamA[i]] = App.getBeyConfig(`team_A_${i}`);
-      this.teamBeyConfigs[this.teamB[i]] = App.getBeyConfig(`team_B_${i}`);
+      const beyA = App.getBeyConfig(`team_A_${i}`);
+      const beyB = App.getBeyConfig(`team_B_${i}`);
+      teamABeys.push(beyA);
+      teamBBeys.push(beyB);
+      this.teamBeyConfigs[`A:${this.teamA[i]}`] = beyA;
+      this.teamBeyConfigs[`B:${this.teamB[i]}`] = beyB;
     }
+
+    // パーツ重複チェック
+    const dupErrA = App.validateBeyDuplicates(teamABeys);
+    if (dupErrA) { App.showToast(`チームA: ${dupErrA}`, 'error'); return; }
+    const dupErrB = App.validateBeyDuplicates(teamBBeys);
+    if (dupErrB) { App.showToast(`チームB: ${dupErrB}`, 'error'); return; }
 
     this.teamMatches = [];
     this.currentMatchIndex = 0;
@@ -365,6 +657,27 @@ const Register = {
   renderTeamBattleUI() {
     const pA = this.teamCurrentPlayerA;
     const pB = this.teamCurrentPlayerB;
+
+    // メンバー状態表示
+    const statusEl = document.getElementById('teamMemberStatus');
+    const renderMembers = (team, remaining, current, label, colorClass) => {
+      return `<div class="team-status">
+        <div class="team-status-label ${colorClass}">${label}</div>
+        <div class="team-status-members">
+          ${team.map(name => {
+            const isOut = !remaining.includes(name);
+            const isCurrent = name === current;
+            let cls = 'team-member-chip';
+            if (isOut) cls += ' eliminated';
+            else if (isCurrent) cls += ' active';
+            return `<span class="${cls}">${name}</span>`;
+          }).join('')}
+        </div>
+      </div>`;
+    };
+    statusEl.innerHTML =
+      renderMembers(this.teamA, this.teamARemaining, pA, 'チームA', 'team-a') +
+      renderMembers(this.teamB, this.teamBRemaining, pB, 'チームB', 'team-b');
 
     document.getElementById('teamMatchTitle').textContent =
       `マッチ ${this.currentMatchIndex + 1}: ${pA} vs ${pB}`;
@@ -393,21 +706,25 @@ const Register = {
       </li>`
     ).join('');
 
-    // 勝者選択
-    const winnerSelect = document.getElementById('teamRoundWinner');
-    winnerSelect.innerHTML = `
-      <option value="a">${pA}</option>
-      <option value="b">${pB}</option>
+    // 勝者選択ボタン
+    const winnerBtns = document.getElementById('teamRoundWinnerButtons');
+    winnerBtns.innerHTML = `
+      <button class="btn ${this.teamSelectedWinner === 'a' ? 'btn-primary' : 'btn-outline'}" onclick="Register.selectTeamRoundWinner('a')">${pA}</button>
+      <button class="btn ${this.teamSelectedWinner === 'b' ? 'btn-primary' : 'btn-outline'}" onclick="Register.selectTeamRoundWinner('b')">${pB}</button>
     `;
 
-    // フィニッシュボタン
+    // フィニッシュボタン（勝者選択後に表示）
     const finishBtns = document.getElementById('teamFinishButtons');
-    finishBtns.innerHTML = Object.entries(DEFAULT_FINISH_POINTS).map(([key, data]) =>
-      `<button class="finish-btn" onclick="Register.recordTeamRound('${key}')">
-        ${data.name}
-        <span class="finish-points">+${data.points}点</span>
-      </button>`
-    ).join('');
+    if (this.teamSelectedWinner) {
+      finishBtns.innerHTML = Object.entries(DEFAULT_FINISH_POINTS).map(([key, data]) =>
+        `<button class="finish-btn" onclick="Register.recordTeamRound('${key}')">
+          ${data.name}
+          <span class="finish-points">+${data.points}点</span>
+        </button>`
+      ).join('');
+    } else {
+      finishBtns.innerHTML = '';
+    }
 
     // マッチ終了判定
     if (this.teamScores.a >= 2 || this.teamScores.b >= 2) {
@@ -418,14 +735,21 @@ const Register = {
     }
   },
 
+  // チーム戦の勝者選択
+  selectTeamRoundWinner(winner) {
+    this.teamSelectedWinner = winner;
+    this.renderTeamBattleUI();
+  },
+
   // チーム戦ラウンド記録
   recordTeamRound(finishType) {
-    const winner = document.getElementById('teamRoundWinner').value;
+    const winner = this.teamSelectedWinner;
     const points = DEFAULT_FINISH_POINTS[finishType].points;
     const winnerName = winner === 'a' ? this.teamCurrentPlayerA : this.teamCurrentPlayerB;
 
     this.teamRounds.push({ winner, winnerName, finishType, points });
     this.teamScores[winner] += points;
+    this.teamSelectedWinner = null;
 
     this.renderTeamBattleUI();
   },
@@ -438,11 +762,11 @@ const Register = {
     this.teamMatches.push({
       playerA: {
         name: this.teamCurrentPlayerA,
-        bey: this.teamBeyConfigs[this.teamCurrentPlayerA]
+        bey: this.teamBeyConfigs[`A:${this.teamCurrentPlayerA}`]
       },
       playerB: {
         name: this.teamCurrentPlayerB,
-        bey: this.teamBeyConfigs[this.teamCurrentPlayerB]
+        bey: this.teamBeyConfigs[`B:${this.teamCurrentPlayerB}`]
       },
       rounds: [...this.teamRounds],
       scores: { ...this.teamScores },
@@ -508,18 +832,24 @@ const Register = {
     const battleId = Date.now().toString();
 
     if (this.battleType === 'individual') {
+      const players = this.battleFormat === '3on3' ? {
+        player1: { name: this.player1.name, beys: this.player1Beys },
+        player2: { name: this.player2.name, beys: this.player2Beys }
+      } : {
+        player1: { name: this.player1.name, bey: this.player1.bey },
+        player2: { name: this.player2.name, bey: this.player2.bey }
+      };
+
       const data = {
         timestamp: Date.now(),
         stadium: this.stadium,
         type: 'individual',
+        battleFormat: this.battleFormat,
         winCondition: this.winCondition,
         finishPoints: Object.fromEntries(
           Object.entries(this.finishPoints).map(([k, v]) => [k, v.points])
         ),
-        players: {
-          player1: { name: this.player1.name, bey: this.player1.bey },
-          player2: { name: this.player2.name, bey: this.player2.bey }
-        },
+        players: players,
         rounds: this.rounds,
         winner: this.scores.player1 >= this.winCondition ? this.player1.name : this.player2.name,
         finalScore: { player1: this.scores.player1, player2: this.scores.player2 },

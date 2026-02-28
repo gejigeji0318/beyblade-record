@@ -76,7 +76,8 @@ const App = {
       userSelect: 'screenUserSelect',
       menu: 'screenMenu',
       register: 'screenRegister',
-      view: 'screenView'
+      view: 'screenView',
+      preset: 'screenPreset'
     };
 
     const targetId = screenMap[screen];
@@ -91,6 +92,8 @@ const App = {
       Register.init();
     } else if (screen === 'view') {
       View.init();
+    } else if (screen === 'preset') {
+      Preset.init();
     }
   },
 
@@ -116,7 +119,16 @@ const App = {
   // ベイ構成フォームを生成
   createBeyForm(containerId, prefix) {
     const container = document.getElementById(containerId);
+    const presets = this.getPresets();
     container.innerHTML = `
+      <!-- プリセット呼び出し -->
+      <div class="preset-row">
+        <select id="${prefix}_presetSelect" class="preset-select" onchange="App.loadPreset('${prefix}')">
+          <option value="">プリセット選択...</option>
+          ${presets.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+        </select>
+      </div>
+
       <!-- Blade選択 -->
       <div class="form-group">
         <label>Bladeタイプ</label>
@@ -321,6 +333,158 @@ const App = {
     }
 
     return null;
+  },
+
+  // ベイパーツ重複チェック（3on3・チーム戦用）
+  // Lock Chip以外は重複不可、Lock Chipはワルキューレ・エンペラーのみ重複不可
+  validateBeyDuplicates(beys) {
+    const NO_DUPLICATE_LOCK_CHIPS = ['ワルキューレ', 'エンペラー'];
+    const collected = {
+      blade: [], mainBlade: [], assistBlade: [], lockChip: [], ratchet: [], bit: []
+    };
+
+    for (const bey of beys) {
+      if (!bey) continue;
+      if (bey.bladeType === 'CX') {
+        if (bey.mainBlade) collected.mainBlade.push(bey.mainBlade);
+        if (bey.assistBlade) collected.assistBlade.push(bey.assistBlade);
+        if (bey.lockChip && NO_DUPLICATE_LOCK_CHIPS.includes(bey.lockChip)) {
+          collected.lockChip.push(bey.lockChip);
+        }
+      } else {
+        if (bey.blade) collected.blade.push(bey.blade);
+      }
+      if (bey.ratchet) collected.ratchet.push(bey.ratchet);
+      if (bey.bit) collected.bit.push(bey.bit);
+    }
+
+    const labels = {
+      blade: 'Blade', mainBlade: 'Main Blade', assistBlade: 'Assist Blade',
+      lockChip: 'Lock Chip', ratchet: 'Ratchet', bit: 'Bit'
+    };
+
+    for (const [key, values] of Object.entries(collected)) {
+      const dup = values.find((v, i) => values.indexOf(v) !== i);
+      if (dup) return `${labels[key]}「${dup}」が重複しています`;
+    }
+
+    return null;
+  },
+
+  // --- プリセット機能 ---
+
+  // プリセットのフォーム値をセット
+  setBeyConfig(prefix, config) {
+    // bladeType → onBladeTypeChange で表示切替
+    document.getElementById(`${prefix}_bladeType`).value = config.bladeType || '';
+    this.onBladeTypeChange(prefix);
+
+    if (config.bladeType === 'CX') {
+      document.getElementById(`${prefix}_lockChip`).value = config.lockChip || '';
+      document.getElementById(`${prefix}_mainBlade`).value = config.mainBlade || '';
+      document.getElementById(`${prefix}_assistBlade`).value = config.assistBlade || '';
+    } else if (config.blade) {
+      document.getElementById(`${prefix}_blade`).value = config.blade;
+    }
+
+    // ratchetKey → onRatchetKeyChange で高さオプション生成
+    document.getElementById(`${prefix}_ratchetKey`).value = config.ratchetKey || '';
+    this.onRatchetKeyChange(prefix);
+    if (config.ratchetValue) {
+      document.getElementById(`${prefix}_ratchetValue`).value = config.ratchetValue;
+    }
+
+    // Bit
+    const bitEl = document.getElementById(`${prefix}_bit`);
+    if (bitEl && config.bit) {
+      bitEl.value = config.bit;
+    }
+  },
+
+  // プリセット保存用のconfig取得（ratchetKey/Value分離保存）
+  getPresetConfig(prefix) {
+    const config = this.getBeyConfig(prefix);
+    config.ratchetKey = document.getElementById(`${prefix}_ratchetKey`).value;
+    config.ratchetValue = document.getElementById(`${prefix}_ratchetValue`).value || '';
+    return config;
+  },
+
+  // localStorage からプリセット一覧取得
+  getPresets() {
+    try {
+      return JSON.parse(localStorage.getItem('beyPresets') || '[]');
+    } catch { return []; }
+  },
+
+  // プリセット保存
+  savePreset(prefix) {
+    const err = this.validateBeyConfig(prefix);
+    if (err) { this.showToast(err, 'error'); return; }
+
+    const config = this.getPresetConfig(prefix);
+    const autoName = this.beyConfigToShortName(config);
+    const name = prompt('プリセット名を入力', autoName);
+    if (!name) return;
+
+    const presets = this.getPresets();
+    presets.push({ id: Date.now(), name, config });
+    localStorage.setItem('beyPresets', JSON.stringify(presets));
+    this.refreshAllPresetSelects();
+    this.showToast(`プリセット「${name}」を保存しました`);
+  },
+
+  // プリセット削除
+  deletePreset(prefix) {
+    const select = document.getElementById(`${prefix}_presetSelect`);
+    const id = parseInt(select.value);
+    if (!id) { this.showToast('削除するプリセットを選択してください', 'error'); return; }
+
+    const presets = this.getPresets();
+    const target = presets.find(p => p.id === id);
+    if (!target) return;
+    if (!confirm(`プリセット「${target.name}」を削除しますか？`)) return;
+
+    const filtered = presets.filter(p => p.id !== id);
+    localStorage.setItem('beyPresets', JSON.stringify(filtered));
+    this.refreshAllPresetSelects();
+    this.showToast('プリセットを削除しました');
+  },
+
+  // プリセット読み込み
+  loadPreset(prefix) {
+    const select = document.getElementById(`${prefix}_presetSelect`);
+    const id = parseInt(select.value);
+    if (!id) return;
+
+    const presets = this.getPresets();
+    const preset = presets.find(p => p.id === id);
+    if (!preset) return;
+
+    this.setBeyConfig(prefix, preset.config);
+  },
+
+  // プリセット用の短縮名自動生成
+  beyConfigToShortName(config) {
+    let blade = '';
+    if (config.bladeType === 'CX') {
+      blade = [config.lockChip, config.mainBlade, config.assistBlade].filter(Boolean).join(' ');
+    } else {
+      blade = config.blade || '';
+    }
+    const ratchet = config.ratchet || '';
+    const bit = (config.bit || '').replace(/（.*?）/g, '');
+    return `${blade} ${ratchet} ${bit}`.trim();
+  },
+
+  // 全フォームのプリセットドロップダウンを更新
+  refreshAllPresetSelects() {
+    const presets = this.getPresets();
+    document.querySelectorAll('.preset-select').forEach(select => {
+      const current = select.value;
+      select.innerHTML = '<option value="">プリセット選択...</option>' +
+        presets.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+      select.value = current;
+    });
   }
 };
 

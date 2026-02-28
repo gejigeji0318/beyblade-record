@@ -340,6 +340,18 @@ label {
   color: #fff;
 }
 
+/* ========== 勝者選択ボタン ========== */
+.winner-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.winner-buttons .btn {
+  flex: 1;
+  padding: 12px;
+  font-size: 1rem;
+}
+
 /* ========== ラウンド記録 ========== */
 .round-list {
   list-style: none;
@@ -442,6 +454,10 @@ tbody td:nth-child(3) {
 
 tbody td:nth-child(4) {
   min-width: 120px;
+}
+
+tbody td:nth-child(6) {
+  min-width: 80px;
 }
 
 tbody tr:hover {
@@ -602,6 +618,49 @@ tbody tr:hover {
   color: var(--danger);
 }
 
+/* ========== チーム戦メンバー状態 ========== */
+.team-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.team-status-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  min-width: 60px;
+}
+
+.team-status-members {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.team-member-chip {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.team-member-chip.active {
+  background: rgba(74, 158, 255, 0.2);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.team-member-chip.eliminated {
+  background: rgba(255, 74, 106, 0.1);
+  color: var(--text-muted);
+  border-color: transparent;
+  text-decoration: line-through;
+}
+
 /* ========== 勝利アニメーション ========== */
 .winner-banner {
   text-align: center;
@@ -621,6 +680,99 @@ tbody tr:hover {
 .winner-banner p {
   color: var(--text-secondary);
   font-size: 0.9rem;
+}
+
+/* ========== 詳細モーダル ========== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+.modal h3 {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+}
+
+.modal-section {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.modal-label {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-bottom: 2px;
+}
+
+.modal-value {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.modal-rounds {
+  list-style: none;
+}
+
+.modal-rounds li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 0.85rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.modal-rounds li:last-child {
+  border-bottom: none;
+}
+
+tbody tr {
+  cursor: pointer;
 }
 
 /* ========== トースト通知 ========== */
@@ -721,4 +873,168 @@ tbody tr:hover {
   thead th, tbody td {
     padding: 8px 10px;
   }
+}
+
+/* ========== 3on3モード ========== */
+/* プリセット */
+.preset-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.preset-select {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.preset-btn {
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.preset-btn-save {
+  background: var(--accent);
+  color: #fff;
+}
+
+.preset-btn-save:active {
+  background: var(--accent-hover);
+}
+
+.preset-btn-delete {
+  background: var(--danger);
+  color: #fff;
+}
+
+.preset-btn-delete:active {
+  background: var(--danger-hover);
+}
+
+.format-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.format-selector .select-option {
+  flex: 1;
+  text-align: center;
+}
+
+.bey-matchup {
+  text-align: center;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.bey-matchup-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.bey-matchup-names {
+  font-size: 0.95rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.bey-picker {
+  margin-bottom: 10px;
+}
+
+.bey-picker-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.bey-picker-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bey-picker-btn {
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 0.8rem;
+}
+
+.bey-picker-btn:hover {
+  border-color: var(--accent);
+}
+
+.bey-picker-btn.active {
+  border-color: var(--accent);
+  background: rgba(74, 158, 255, 0.15);
+  color: var(--accent);
+}
+
+.bey-picker-btn.used {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+/* ========== プリセット管理ページ ========== */
+.preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  transition: border-color var(--transition);
+}
+
+.preset-item:hover {
+  border-color: var(--border-light);
+}
+
+.preset-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.preset-item-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.preset-item-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preset-item-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: 12px;
+  flex-shrink: 0;
 }

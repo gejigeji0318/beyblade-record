@@ -22,29 +22,27 @@ const Preset = {
     if (err) { App.showToast(err, 'error'); return; }
 
     const config = App.getPresetConfig('preset');
-    const presets = App.getPresets();
 
     if (this.editingId) {
       // 上書き編集
-      const idx = presets.findIndex(p => p.id === this.editingId);
-      if (idx >= 0) {
-        presets[idx].name = name;
-        presets[idx].config = config;
-      }
-      this.editingId = null;
-      App.showToast(`プリセット「${name}」を更新しました`);
+      database.ref('presets/' + this.editingId).update({ name, config })
+        .then(() => {
+          App.showToast(`プリセット「${name}」を更新しました`);
+          this.editingId = null;
+          nameEl.value = '';
+          App.createBeyForm('presetBeyForm', 'preset');
+        })
+        .catch(err => App.showToast('更新に失敗しました: ' + err.message, 'error'));
     } else {
       // 新規追加
-      presets.push({ id: Date.now(), name, config });
-      App.showToast(`プリセット「${name}」を登録しました`);
+      database.ref('presets').push({ name, config })
+        .then(() => {
+          App.showToast(`プリセット「${name}」を登録しました`);
+          nameEl.value = '';
+          App.createBeyForm('presetBeyForm', 'preset');
+        })
+        .catch(err => App.showToast('登録に失敗しました: ' + err.message, 'error'));
     }
-
-    localStorage.setItem('beyPresets', JSON.stringify(presets));
-    nameEl.value = '';
-    // フォームリセット
-    App.createBeyForm('presetBeyForm', 'preset');
-    this.renderList();
-    App.refreshAllPresetSelects();
   },
 
   // 一覧描画
@@ -52,6 +50,8 @@ const Preset = {
     const presets = App.getPresets();
     const listEl = document.getElementById('presetList');
     const emptyEl = document.getElementById('presetEmpty');
+
+    if (!listEl || !emptyEl) return;
 
     if (presets.length === 0) {
       listEl.innerHTML = '';
@@ -68,8 +68,8 @@ const Preset = {
           <div class="preset-item-desc">${desc}</div>
         </div>
         <div class="preset-item-actions">
-          <button class="preset-btn preset-btn-save" onclick="Preset.edit(${p.id})">編集</button>
-          <button class="preset-btn preset-btn-delete" onclick="Preset.delete(${p.id})">削除</button>
+          <button class="preset-btn preset-btn-save" onclick="Preset.edit('${p.id}')">編集</button>
+          <button class="preset-btn preset-btn-delete" onclick="Preset.delete('${p.id}')">削除</button>
         </div>
       </div>`;
     }).join('');
@@ -96,17 +96,15 @@ const Preset = {
     if (!target) return;
     if (!confirm(`プリセット「${target.name}」を削除しますか？`)) return;
 
-    const filtered = presets.filter(p => p.id !== id);
-    localStorage.setItem('beyPresets', JSON.stringify(filtered));
-
-    if (this.editingId === id) {
-      this.editingId = null;
-      document.getElementById('presetName').value = '';
-      App.createBeyForm('presetBeyForm', 'preset');
-    }
-
-    this.renderList();
-    App.refreshAllPresetSelects();
-    App.showToast('プリセットを削除しました');
+    database.ref('presets/' + id).remove()
+      .then(() => {
+        if (this.editingId === id) {
+          this.editingId = null;
+          document.getElementById('presetName').value = '';
+          App.createBeyForm('presetBeyForm', 'preset');
+        }
+        App.showToast('プリセットを削除しました');
+      })
+      .catch(err => App.showToast('削除に失敗しました: ' + err.message, 'error'));
   }
 };

@@ -2,6 +2,8 @@
 const App = {
   currentUser: null,
   currentScreen: 'passphrase',
+  presetsCache: [],
+  presetsListener: null,
 
   init() {
     // セッション中に認証済みならスキップ
@@ -12,6 +14,7 @@ const App = {
     }
     this.renderUserGrid();
     this.renderPlayerFilter();
+    this.startPresetsListener();
   },
 
   // SHA-256ハッシュ計算
@@ -106,6 +109,51 @@ const App = {
     select.innerHTML = options;
   },
 
+  // ひらがな→カタカナ変換（文字列）
+  toKatakana(str) {
+    return str.replace(/[\u3041-\u3096]/g, ch =>
+      String.fromCharCode(ch.charCodeAt(0) + 0x60)
+    );
+  },
+
+  // Blade検索ドロップダウンの表示・フィルタ
+  filterBladeList(prefix) {
+    const input = document.getElementById(`${prefix}_blade`);
+    const dropdown = document.getElementById(`${prefix}_bladeDropdown`);
+    const bladeType = document.getElementById(`${prefix}_bladeType`).value;
+
+    if (!bladeType || bladeType === 'CX' || !BLADE_DATA[bladeType]) {
+      dropdown.classList.add('hidden');
+      return;
+    }
+
+    const query = this.toKatakana(input.value.trim());
+    const blades = BLADE_DATA[bladeType];
+    const filtered = query ? blades.filter(b => b.includes(query)) : blades;
+
+    if (filtered.length === 0) {
+      dropdown.innerHTML = '<div class="blade-dropdown-empty">該当なし</div>';
+      dropdown.classList.remove('hidden');
+      return;
+    }
+
+    dropdown.innerHTML = filtered.map(b =>
+      `<div class="blade-dropdown-item" onmousedown="App.selectBlade('${prefix}','${b}')">${b}</div>`
+    ).join('');
+    dropdown.classList.remove('hidden');
+  },
+
+  // Blade候補を選択
+  selectBlade(prefix, value) {
+    document.getElementById(`${prefix}_blade`).value = value;
+    document.getElementById(`${prefix}_bladeDropdown`).classList.add('hidden');
+  },
+
+  // Bladeドロップダウンを閉じる
+  closeBladeList(prefix) {
+    document.getElementById(`${prefix}_bladeDropdown`).classList.add('hidden');
+  },
+
   // トースト通知
   showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
@@ -144,8 +192,13 @@ const App = {
       <!-- BX/UX/その他 用のBlade選択 -->
       <div class="form-group hidden" id="${prefix}_bladeSimple">
         <label>Blade</label>
-        <input type="text" id="${prefix}_blade" list="${prefix}_bladeList" placeholder="入力して検索..." autocomplete="off">
-        <datalist id="${prefix}_bladeList"></datalist>
+        <div class="blade-search-wrap">
+          <input type="text" id="${prefix}_blade" placeholder="入力して検索（ひらがな可）..." autocomplete="off"
+            oninput="App.filterBladeList('${prefix}')"
+            onfocus="App.filterBladeList('${prefix}')"
+            onblur="setTimeout(()=>App.closeBladeList('${prefix}'),200)">
+          <div class="blade-dropdown hidden" id="${prefix}_bladeDropdown"></div>
+        </div>
       </div>
 
       <!-- CX用の3パーツ選択 -->
@@ -210,7 +263,6 @@ const App = {
     const simpleEl = document.getElementById(`${prefix}_bladeSimple`);
     const cxEl = document.getElementById(`${prefix}_bladeCX`);
     const bladeInput = document.getElementById(`${prefix}_blade`);
-    const bladeList = document.getElementById(`${prefix}_bladeList`);
 
     simpleEl.classList.add('hidden');
     cxEl.classList.add('hidden');
@@ -224,7 +276,6 @@ const App = {
     } else if (type && BLADE_DATA[type]) {
       simpleEl.classList.remove('hidden');
       bladeInput.value = '';
-      bladeList.innerHTML = BLADE_DATA[type].map(b => `<option value="${b}">`).join('');
     }
   },
 
@@ -321,6 +372,10 @@ const App = {
       if (!config.assistBlade) return 'Assist Bladeを選択してください';
     } else {
       if (!config.blade) return 'Bladeを選択してください';
+      const bladeList = BLADE_DATA[config.bladeType];
+      if (bladeList && !bladeList.includes(config.blade)) {
+        return `「${config.blade}」はBladeリストに存在しません`;
+      }
     }
 
     const ratchetKey = document.getElementById(`${prefix}_ratchetKey`).value;
@@ -409,51 +464,37 @@ const App = {
     return config;
   },
 
-  // localStorage からプリセット一覧取得
+  // Firebaseからプリセットをリアルタイム取得
+  startPresetsListener() {
+    if (this.presetsListener) {
+      database.ref('presets').off('value', this.presetsListener);
+    }
+    this.presetsListener = database.ref('presets').on('value', snapshot => {
+      this.presetsCache = [];
+      const data = snapshot.val();
+      if (data) {
+        Object.entries(data).forEach(([id, preset]) => {
+          preset.id = id;
+          this.presetsCache.push(preset);
+        });
+      }
+      this.refreshAllPresetSelects();
+      // プリセット管理画面が表示中なら一覧を更新
+      if (this.currentScreen === 'preset') {
+        Preset.renderList();
+      }
+    });
+  },
+
+  // プリセット一覧取得（キャッシュから）
   getPresets() {
-    try {
-      return JSON.parse(localStorage.getItem('beyPresets') || '[]');
-    } catch { return []; }
-  },
-
-  // プリセット保存
-  savePreset(prefix) {
-    const err = this.validateBeyConfig(prefix);
-    if (err) { this.showToast(err, 'error'); return; }
-
-    const config = this.getPresetConfig(prefix);
-    const autoName = this.beyConfigToShortName(config);
-    const name = prompt('プリセット名を入力', autoName);
-    if (!name) return;
-
-    const presets = this.getPresets();
-    presets.push({ id: Date.now(), name, config });
-    localStorage.setItem('beyPresets', JSON.stringify(presets));
-    this.refreshAllPresetSelects();
-    this.showToast(`プリセット「${name}」を保存しました`);
-  },
-
-  // プリセット削除
-  deletePreset(prefix) {
-    const select = document.getElementById(`${prefix}_presetSelect`);
-    const id = parseInt(select.value);
-    if (!id) { this.showToast('削除するプリセットを選択してください', 'error'); return; }
-
-    const presets = this.getPresets();
-    const target = presets.find(p => p.id === id);
-    if (!target) return;
-    if (!confirm(`プリセット「${target.name}」を削除しますか？`)) return;
-
-    const filtered = presets.filter(p => p.id !== id);
-    localStorage.setItem('beyPresets', JSON.stringify(filtered));
-    this.refreshAllPresetSelects();
-    this.showToast('プリセットを削除しました');
+    return this.presetsCache;
   },
 
   // プリセット読み込み
   loadPreset(prefix) {
     const select = document.getElementById(`${prefix}_presetSelect`);
-    const id = parseInt(select.value);
+    const id = select.value;
     if (!id) return;
 
     const presets = this.getPresets();

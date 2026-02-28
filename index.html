@@ -200,6 +200,12 @@
           <option value="all">全プレイヤー</option>
         </select>
       </div>
+      <div class="filter-bar" style="margin-top:8px;">
+        <label style="color:var(--text-secondary);font-size:0.85rem;white-space:nowrap;">開始:</label>
+        <input type="date" id="filterDateFrom">
+        <label style="color:var(--text-secondary);font-size:0.85rem;white-space:nowrap;">終了:</label>
+        <input type="date" id="filterDateTo">
+      </div>
     </div>
 
     <!-- 統計 -->
@@ -212,12 +218,13 @@
         <table id="battleTable">
           <thead>
             <tr>
-              <th>日時</th>
-              <th>スタジアム</th>
               <th>種別</th>
+              <th>スタジアム</th>
+              <th>使用ベイ</th>
               <th>対戦</th>
               <th>スコア</th>
               <th>勝者</th>
+              <th>日時</th>
               <th></th>
             </tr>
           </thead>

@@ -47,7 +47,24 @@ const Register = {
   },
 
   reset() {
-    this.init();
+    // バトル進行データのみリセット（ベイ構成・ユーザー選択は保持）
+    this.rounds = [];
+    this.scores = { player1: 0, player2: 0 };
+    this.teamMatches = [];
+    this.currentMatchIndex = 0;
+    this.teamScores = { a: 0, b: 0 };
+    this.teamRounds = [];
+    this.finishPoints = JSON.parse(JSON.stringify(DEFAULT_FINISH_POINTS));
+    this.winCondition = DEFAULT_WIN_CONDITION;
+
+    // 画面をステップ1に戻す（スタジアム選択済みならステップ2も表示）
+    document.getElementById('registerStep1').classList.remove('hidden');
+    document.getElementById('registerStep2').classList.toggle('hidden', !this.stadium);
+    document.getElementById('registerIndividual').classList.toggle('hidden', this.battleType !== 'individual');
+    document.getElementById('registerTeam').classList.toggle('hidden', this.battleType !== 'team');
+    document.getElementById('battleProgress').classList.add('hidden');
+    document.getElementById('teamBattleProgress').classList.add('hidden');
+    document.getElementById('battleResult').classList.add('hidden');
   },
 
   // スタジアム選択の描画
@@ -60,8 +77,9 @@ const Register = {
 
   // プレイヤー選択の描画
   renderPlayerSelects() {
+    const currentUser = App.currentUser || '';
     const p1Options = '<option value="">選択してください</option>' +
-      USERS.map(u => `<option value="${u}">${u}</option>`).join('');
+      USERS.map(u => `<option value="${u}"${u === currentUser ? ' selected' : ''}>${u}</option>`).join('');
     const p2Options = '<option value="">選択してください</option>' +
       USERS.map(u => `<option value="${u}">${u}</option>`).join('') +
       '<option value="__other__">その他</option>';

@@ -132,7 +132,8 @@ const App = {
       <!-- BX/UX/その他 用のBlade選択 -->
       <div class="form-group hidden" id="${prefix}_bladeSimple">
         <label>Blade</label>
-        <select id="${prefix}_blade"></select>
+        <input type="text" id="${prefix}_blade" list="${prefix}_bladeList" placeholder="入力して検索..." autocomplete="off">
+        <datalist id="${prefix}_bladeList"></datalist>
       </div>
 
       <!-- CX用の3パーツ選択 -->
@@ -162,37 +163,17 @@ const App = {
 
       <!-- Ratchet選択 -->
       <div class="form-group">
-        <label>Ratchetタイプ</label>
-        <select id="${prefix}_ratchetType" onchange="App.onRatchetTypeChange('${prefix}')">
+        <label>Ratchet刃数</label>
+        <select id="${prefix}_ratchetKey" onchange="App.onRatchetKeyChange('${prefix}')">
           <option value="">選択してください</option>
-          <option value="simpleRatchet">Simple Ratchet</option>
-          <option value="bitTogether">Bit Together</option>
+          ${Object.keys(RATCHET_DATA.simpleRatchet).map(k => `<option value="${k}">${k}</option>`).join('')}
+          ${RATCHET_DATA.bitTogether.map(v => `<option value="${v}">${v}</option>`).join('')}
         </select>
       </div>
-
-      <!-- Simple Ratchet用 -->
-      <div id="${prefix}_ratchetSimple" class="hidden">
-        <div class="form-group">
-          <label>Ratchet番号</label>
-          <select id="${prefix}_ratchetKey" onchange="App.onRatchetKeyChange('${prefix}')">
-            <option value="">選択してください</option>
-            ${Object.keys(RATCHET_DATA.simpleRatchet).map(k => `<option value="${k}">${k}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Ratchet値</label>
-          <select id="${prefix}_ratchetValue">
-            <option value="">先に番号を選択</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Bit Together用 -->
-      <div class="form-group hidden" id="${prefix}_ratchetBitTogether">
-        <label>Bit Together</label>
-        <select id="${prefix}_bitTogether">
-          <option value="">選択してください</option>
-          ${RATCHET_DATA.bitTogether.map(v => `<option value="${v}">${v}</option>`).join('')}
+      <div class="form-group hidden" id="${prefix}_ratchetValueWrap">
+        <label>Ratchet高さ</label>
+        <select id="${prefix}_ratchetValue">
+          <option value="">先に番号を選択</option>
         </select>
       </div>
 
@@ -216,56 +197,52 @@ const App = {
     const type = document.getElementById(`${prefix}_bladeType`).value;
     const simpleEl = document.getElementById(`${prefix}_bladeSimple`);
     const cxEl = document.getElementById(`${prefix}_bladeCX`);
-    const bladeSelect = document.getElementById(`${prefix}_blade`);
+    const bladeInput = document.getElementById(`${prefix}_blade`);
+    const bladeList = document.getElementById(`${prefix}_bladeList`);
 
     simpleEl.classList.add('hidden');
     cxEl.classList.add('hidden');
 
     if (type === 'CX') {
       cxEl.classList.remove('hidden');
+      // CXの入力欄をリセット
+      document.getElementById(`${prefix}_lockChip`).value = '';
+      document.getElementById(`${prefix}_mainBlade`).value = '';
+      document.getElementById(`${prefix}_assistBlade`).value = '';
     } else if (type && BLADE_DATA[type]) {
       simpleEl.classList.remove('hidden');
-      bladeSelect.innerHTML = '<option value="">選択してください</option>' +
-        BLADE_DATA[type].map(b => `<option value="${b}">${b}</option>`).join('');
-    }
-  },
-
-  // Ratchetタイプ変更
-  onRatchetTypeChange(prefix) {
-    const type = document.getElementById(`${prefix}_ratchetType`).value;
-    const simpleEl = document.getElementById(`${prefix}_ratchetSimple`);
-    const btEl = document.getElementById(`${prefix}_ratchetBitTogether`);
-    const bitSection = document.getElementById(`${prefix}_bitSection`);
-
-    simpleEl.classList.add('hidden');
-    btEl.classList.add('hidden');
-
-    if (type === 'simpleRatchet') {
-      simpleEl.classList.remove('hidden');
-      bitSection.classList.remove('hidden');
-    } else if (type === 'bitTogether') {
-      btEl.classList.remove('hidden');
-      bitSection.classList.add('hidden');
+      bladeInput.value = '';
+      bladeList.innerHTML = BLADE_DATA[type].map(b => `<option value="${b}">`).join('');
     }
   },
 
   // Ratchetキー変更
   onRatchetKeyChange(prefix) {
     const key = document.getElementById(`${prefix}_ratchetKey`).value;
+    const valueWrap = document.getElementById(`${prefix}_ratchetValueWrap`);
     const valueSelect = document.getElementById(`${prefix}_ratchetValue`);
+    const bitSection = document.getElementById(`${prefix}_bitSection`);
+    const isBitTogether = RATCHET_DATA.bitTogether.includes(key);
 
-    if (key && RATCHET_DATA.simpleRatchet[key]) {
+    if (isBitTogether) {
+      valueWrap.classList.add('hidden');
+      bitSection.classList.add('hidden');
+    } else if (key && RATCHET_DATA.simpleRatchet[key]) {
+      valueWrap.classList.remove('hidden');
+      bitSection.classList.remove('hidden');
       valueSelect.innerHTML = '<option value="">選択してください</option>' +
         RATCHET_DATA.simpleRatchet[key].map(v => `<option value="${v}">${v}</option>`).join('');
     } else {
-      valueSelect.innerHTML = '<option value="">先に番号を選択</option>';
+      valueWrap.classList.add('hidden');
+      bitSection.classList.remove('hidden');
     }
   },
 
   // ベイ構成データを取得
   getBeyConfig(prefix) {
     const bladeType = document.getElementById(`${prefix}_bladeType`).value;
-    const ratchetType = document.getElementById(`${prefix}_ratchetType`).value;
+    const ratchetKey = document.getElementById(`${prefix}_ratchetKey`).value;
+    const isBitTogether = RATCHET_DATA.bitTogether.includes(ratchetKey);
 
     const config = {
       bladeType: bladeType,
@@ -273,7 +250,7 @@ const App = {
       lockChip: null,
       mainBlade: null,
       assistBlade: null,
-      ratchetType: ratchetType,
+      ratchetType: isBitTogether ? 'bitTogether' : 'simpleRatchet',
       ratchet: null,
       bit: null
     };
@@ -289,16 +266,15 @@ const App = {
     }
 
     // Ratchet
-    if (ratchetType === 'simpleRatchet') {
-      const key = document.getElementById(`${prefix}_ratchetKey`).value;
+    if (isBitTogether) {
+      config.ratchet = ratchetKey;
+    } else if (ratchetKey) {
       const value = document.getElementById(`${prefix}_ratchetValue`).value;
-      config.ratchet = key && value ? `${key}-${value}` : null;
-    } else if (ratchetType === 'bitTogether') {
-      config.ratchet = document.getElementById(`${prefix}_bitTogether`).value;
+      config.ratchet = value ? `${ratchetKey}-${value}` : null;
     }
 
     // Bit
-    if (ratchetType !== 'bitTogether') {
+    if (!isBitTogether) {
       config.bit = document.getElementById(`${prefix}_bit`).value;
     }
 
@@ -335,13 +311,13 @@ const App = {
       if (!config.blade) return 'Bladeを選択してください';
     }
 
-    if (!config.ratchetType) return 'Ratchetタイプを選択してください';
+    const ratchetKey = document.getElementById(`${prefix}_ratchetKey`).value;
+    if (!ratchetKey) return 'Ratchetを選択してください';
 
-    if (config.ratchetType === 'simpleRatchet') {
-      if (!config.ratchet) return 'Ratchetを選択してください';
-      if (!config.bit) return 'Bitを選択してください';
-    } else if (config.ratchetType === 'bitTogether') {
-      if (!config.ratchet) return 'Bit Togetherを選択してください';
+    if (!config.ratchet) return 'Ratchetを選択してください';
+
+    if (config.ratchetType === 'simpleRatchet' && !config.bit) {
+      return 'Bitを選択してください';
     }
 
     return null;

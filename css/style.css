@@ -876,6 +876,97 @@ tbody tr {
 }
 
 /* ========== 3on3モード ========== */
+
+/* ベイ構成タブ */
+.bey-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 8px;
+}
+.bey-tab {
+  flex: 1;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.bey-tab:first-child { border-radius: var(--radius) 0 0 0; }
+.bey-tab:last-child { border-radius: 0 var(--radius) 0 0; }
+.bey-tab.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-bottom-color: var(--primary);
+  font-weight: bold;
+}
+.bey-tab-content { min-height: 40px; }
+.bey-tab-content.hidden { display: none; }
+
+/* お気に入りボタン一覧 */
+.fav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+}
+.fav-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.fav-btn:hover { background: var(--primary); color: #fff; }
+.fav-btn.active { background: var(--primary); color: #fff; }
+.fav-empty {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  padding: 12px 0;
+}
+
+/* 選択済みサマリー */
+.bey-selected-summary {
+  padding: 8px 12px;
+  margin-top: 8px;
+  background: #e8f5e9;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  color: #2e7d32;
+}
+
+/* プリセット検索 */
+.preset-search-wrap {
+  position: relative;
+}
+.preset-search {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-sizing: border-box;
+}
+.preset-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
 /* プリセット */
 .preset-row {
   display: flex;
@@ -1037,6 +1128,29 @@ tbody tr {
   gap: 6px;
   margin-left: 12px;
   flex-shrink: 0;
+}
+
+.preset-item-fav {
+  border-color: rgba(255, 200, 50, 0.4);
+}
+
+.preset-btn-fav {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0 8px 0 0;
+  flex-shrink: 0;
+  transition: color var(--transition);
+}
+
+.preset-btn-fav:hover {
+  color: #ffc832;
+}
+
+.preset-btn-fav.active {
+  color: #ffc832;
 }
 
 /* ========== Blade検索ドロップダウン ========== */

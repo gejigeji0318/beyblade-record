@@ -147,7 +147,8 @@ const View = {
     if (!config) return '?';
     let blade = '';
     if (config.bladeType === 'CX') {
-      blade = `${config.lockChip || ''} ${config.mainBlade || ''} ${config.assistBlade || ''}`.trim();
+      const ab = (config.assistBlade || '').replace(/（.*?）/g, '');
+      blade = `${config.lockChip || ''} ${config.mainBlade || ''} ${ab}`.trim();
     } else {
       blade = config.blade || '?';
     }

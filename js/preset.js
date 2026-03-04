@@ -1,9 +1,12 @@
 // プリセット管理ロジック
 const Preset = {
   editingId: null,
+  currentPage: 1,
+  pageSize: window.innerWidth <= 768 ? 10 : 30,
 
   init() {
     this.editingId = null;
+    this.currentPage = 1;
     App.createBeyForm('presetBeyForm', 'preset', { noTabs: true });
     document.getElementById('presetName').value = '';
     this.renderList();
@@ -72,11 +75,11 @@ const Preset = {
     const presets = App.getPresets();
     const listEl = document.getElementById('presetList');
     const emptyEl = document.getElementById('presetEmpty');
-
     if (!listEl || !emptyEl) return;
 
     if (presets.length === 0) {
       listEl.innerHTML = '';
+      this.clearPagers();
       emptyEl.classList.remove('hidden');
       return;
     }
@@ -87,7 +90,15 @@ const Preset = {
     const others = presets.filter(p => !App.isFavorite(p.id));
     const sorted = [...favs, ...others];
 
-    listEl.innerHTML = sorted.map(p => {
+    // ページ計算
+    const totalCount = sorted.length;
+    const totalPages = Math.ceil(totalCount / this.pageSize);
+    if (this.currentPage > totalPages) this.currentPage = totalPages;
+    if (this.currentPage < 1) this.currentPage = 1;
+    const start = (this.currentPage - 1) * this.pageSize;
+    const pageItems = sorted.slice(start, start + this.pageSize);
+
+    listEl.innerHTML = pageItems.map(p => {
       const desc = App.beyConfigToShortName(p.config);
       const isFav = App.isFavorite(p.id);
       const starClass = isFav ? 'preset-btn-fav active' : 'preset-btn-fav';
@@ -103,6 +114,73 @@ const Preset = {
         </div>
       </div>`;
     }).join('');
+
+    this.renderPager(totalCount, totalPages);
+  },
+
+  // ページャーをクリア
+  clearPagers() {
+    const top = document.getElementById('presetPagerTop');
+    const bottom = document.getElementById('presetPagerBottom');
+    if (top) top.innerHTML = '';
+    if (bottom) bottom.innerHTML = '';
+  },
+
+  // ページャー描画（上下両方）
+  renderPager(totalCount, totalPages) {
+    const topEl = document.getElementById('presetPagerTop');
+    const bottomEl = document.getElementById('presetPagerBottom');
+
+    if (totalCount === 0) { this.clearPagers(); return; }
+
+    const start = (this.currentPage - 1) * this.pageSize + 1;
+    const end = Math.min(this.currentPage * this.pageSize, totalCount);
+
+    // 件数切替ボタン
+    const sizes = [10, 30, 50];
+    const sizesHtml = '<div class="preset-pager-sizes">' +
+      sizes.map(s =>
+        `<button class="preset-pager-size${this.pageSize === s ? ' active' : ''}" onclick="Preset.changePageSize(${s})">${s}件</button>`
+      ).join('') + '</div>';
+
+    // 情報
+    const infoHtml = `<div class="preset-pager-info">全${totalCount}件中 ${start}-${end}件</div>`;
+
+    // ページ送りHTML（2ページ以上ある場合のみ）
+    let navHtml = '';
+    if (totalPages > 1) {
+      let pages = [];
+      pages.push(`<button class="preset-pager-btn" onclick="Preset.goToPage(${this.currentPage - 1})"${this.currentPage <= 1 ? ' disabled' : ''}>←</button>`);
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+          pages.push(`<button class="preset-pager-btn${i === this.currentPage ? ' active' : ''}" onclick="Preset.goToPage(${i})">${i}</button>`);
+        } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+          pages.push('<span class="preset-pager-dots">...</span>');
+        }
+      }
+      pages.push(`<button class="preset-pager-btn" onclick="Preset.goToPage(${this.currentPage + 1})"${this.currentPage >= totalPages ? ' disabled' : ''}>→</button>`);
+      navHtml = '<div class="preset-pager-nav">' + pages.join('') + '</div>';
+    }
+
+    // 上: 件数切替 + 情報 + ページ送り
+    if (topEl) topEl.innerHTML = `<div class="preset-pager-row">${sizesHtml}${infoHtml}</div>${navHtml}`;
+    // 下: ページ送りのみ
+    if (bottomEl) bottomEl.innerHTML = navHtml;
+  },
+
+  // 表示件数変更
+  changePageSize(size) {
+    this.pageSize = size;
+    this.currentPage = 1;
+    this.renderList();
+  },
+
+  // ページ移動
+  goToPage(page) {
+    this.currentPage = page;
+    this.renderList();
+    const listEl = document.getElementById('presetList');
+    if (listEl) listEl.scrollIntoView({ behavior: 'smooth' });
   },
 
   // 編集: フォームに読み込み

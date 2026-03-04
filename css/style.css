@@ -1087,6 +1087,71 @@ tbody tr {
 }
 
 /* ========== プリセット管理ページ ========== */
+
+/* ページャー */
+.preset-pager {
+  padding: 12px 0;
+}
+.preset-pager-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.preset-pager-info {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.preset-pager-nav {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+.preset-pager-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.preset-pager-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.preset-pager-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.preset-pager-dots {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  padding: 0 2px;
+}
+.preset-pager-sizes {
+  display: flex;
+  gap: 4px;
+}
+.preset-pager-size {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.preset-pager-size.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
 .preset-item {
   display: flex;
   align-items: center;

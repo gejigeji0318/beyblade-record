@@ -150,6 +150,8 @@ const App = {
   selectBlade(prefix, value) {
     document.getElementById(`${prefix}_blade`).value = value;
     document.getElementById(`${prefix}_bladeDropdown`).classList.add('hidden');
+    // ブレード固有のラチェット制限を反映
+    this.refreshRatchetKeys(prefix);
   },
 
   // Bladeドロップダウンを閉じる
@@ -284,8 +286,16 @@ const App = {
           </div>
         </div>
 
-        <!-- CX用の3パーツ選択 -->
+        <!-- CX用パーツ選択 -->
         <div id="${prefix}_bladeCX" class="hidden">
+          <div class="form-group cx-type-row">
+            <label>
+              <input type="radio" name="${prefix}_cxType" value="main" checked onchange="App.onCxTypeChange('${prefix}')"> メインブレード型
+            </label>
+            <label>
+              <input type="radio" name="${prefix}_cxType" value="over" onchange="App.onCxTypeChange('${prefix}')"> オーバーブレード型
+            </label>
+          </div>
           <div class="form-group">
             <label>Lock Chip</label>
             <select id="${prefix}_lockChip">
@@ -293,12 +303,30 @@ const App = {
               ${BLADE_DATA.CX.lockChip.map(v => `<option value="${v}">${v}</option>`).join('')}
             </select>
           </div>
-          <div class="form-group">
-            <label>Main Blade</label>
-            <select id="${prefix}_mainBlade">
-              <option value="">選択してください</option>
-              ${BLADE_DATA.CX.mainBlade.map(v => `<option value="${v}">${v}</option>`).join('')}
-            </select>
+          <div id="${prefix}_cxMain">
+            <div class="form-group">
+              <label>Main Blade</label>
+              <select id="${prefix}_mainBlade">
+                <option value="">選択してください</option>
+                ${BLADE_DATA.CX.mainBlade.map(v => `<option value="${v}">${v}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div id="${prefix}_cxOver" class="hidden">
+            <div class="form-group">
+              <label>Metal Blade</label>
+              <select id="${prefix}_metalBlade">
+                <option value="">選択してください</option>
+                ${BLADE_DATA.CX.metalBlade.map(v => `<option value="${v}">${v}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Over Blade</label>
+              <select id="${prefix}_overBlade">
+                <option value="">選択してください</option>
+                ${BLADE_DATA.CX.overBlade.map(v => `<option value="${v}">${v}</option>`).join('')}
+              </select>
+            </div>
           </div>
           <div class="form-group">
             <label>Assist Blade</label>
@@ -359,11 +387,69 @@ const App = {
       // CXの入力欄をリセット
       document.getElementById(`${prefix}_lockChip`).value = '';
       document.getElementById(`${prefix}_mainBlade`).value = '';
+      document.getElementById(`${prefix}_overBlade`).value = '';
+      document.getElementById(`${prefix}_metalBlade`).value = '';
       document.getElementById(`${prefix}_assistBlade`).value = '';
+      // cxTypeをmainに初期化
+      const mainRadio = document.querySelector(`input[name="${prefix}_cxType"][value="main"]`);
+      if (mainRadio) mainRadio.checked = true;
+      this.onCxTypeChange(prefix);
     } else if (type && BLADE_DATA[type]) {
       simpleEl.classList.remove('hidden');
       bladeInput.value = '';
     }
+  },
+
+  // CXサブタイプ切替
+  onCxTypeChange(prefix) {
+    const cxType = document.querySelector(`input[name="${prefix}_cxType"]:checked`);
+    const isOver = cxType && cxType.value === 'over';
+    const mainEl = document.getElementById(`${prefix}_cxMain`);
+    const overEl = document.getElementById(`${prefix}_cxOver`);
+    if (mainEl) mainEl.classList.toggle('hidden', isOver);
+    if (overEl) overEl.classList.toggle('hidden', !isOver);
+  },
+
+  // 選択中のブレード名を取得
+  getSelectedBlade(prefix) {
+    const bladeType = document.getElementById(`${prefix}_bladeType`).value;
+    if (bladeType === 'CX') return '';
+    return (document.getElementById(`${prefix}_blade`) || {}).value || '';
+  },
+
+  // ブレード固有のラチェット制限（値が5で終わるもののみ）
+  RATCHET_RESTRICTED_BLADES: ['クロックミラージュ'],
+
+  isRatchetRestricted(prefix) {
+    return this.RATCHET_RESTRICTED_BLADES.includes(this.getSelectedBlade(prefix));
+  },
+
+  // ブレード制限に応じてRatchet刃数ドロップダウンを更新
+  refreshRatchetKeys(prefix) {
+    const keySelect = document.getElementById(`${prefix}_ratchetKey`);
+    if (!keySelect) return;
+    const current = keySelect.value;
+    const restricted = this.isRatchetRestricted(prefix);
+
+    let html = '<option value="">選択してください</option>';
+    // simpleRatchet: 制限時は5で終わる値を持つキーのみ
+    Object.entries(RATCHET_DATA.simpleRatchet).forEach(([k, values]) => {
+      if (restricted && !values.some(v => v % 10 === 5)) return;
+      html += `<option value="${k}">${k}</option>`;
+    });
+    // bitTogether: 制限時は非表示
+    if (!restricted) {
+      RATCHET_DATA.bitTogether.forEach(v => {
+        html += `<option value="${v}">${v}</option>`;
+      });
+    }
+    keySelect.innerHTML = html;
+    keySelect.value = current;
+    // 選択中のキーが消えた場合はリセット
+    if (keySelect.value !== current) {
+      keySelect.value = '';
+    }
+    this.onRatchetKeyChange(prefix);
   },
 
   // Ratchetキー変更
@@ -373,6 +459,7 @@ const App = {
     const valueSelect = document.getElementById(`${prefix}_ratchetValue`);
     const bitSection = document.getElementById(`${prefix}_bitSection`);
     const isBitTogether = RATCHET_DATA.bitTogether.includes(key);
+    const restricted = this.isRatchetRestricted(prefix);
 
     if (isBitTogether) {
       valueWrap.classList.add('hidden');
@@ -380,8 +467,10 @@ const App = {
     } else if (key && RATCHET_DATA.simpleRatchet[key]) {
       valueWrap.classList.remove('hidden');
       bitSection.classList.remove('hidden');
+      let values = RATCHET_DATA.simpleRatchet[key];
+      if (restricted) values = values.filter(v => v % 10 === 5);
       valueSelect.innerHTML = '<option value="">選択してください</option>' +
-        RATCHET_DATA.simpleRatchet[key].map(v => `<option value="${v}">${v}</option>`).join('');
+        values.map(v => `<option value="${v}">${v}</option>`).join('');
     } else {
       valueWrap.classList.add('hidden');
       bitSection.classList.remove('hidden');
@@ -399,7 +488,10 @@ const App = {
       blade: null,
       lockChip: null,
       mainBlade: null,
+      overBlade: null,
+      metalBlade: null,
       assistBlade: null,
+      cxType: null,
       ratchetType: isBitTogether ? 'bitTogether' : 'simpleRatchet',
       ratchet: null,
       bit: null
@@ -407,10 +499,18 @@ const App = {
 
     // Blade
     if (bladeType === 'CX') {
+      const cxTypeRadio = document.querySelector(`input[name="${prefix}_cxType"]:checked`);
+      config.cxType = cxTypeRadio ? cxTypeRadio.value : 'main';
       config.lockChip = document.getElementById(`${prefix}_lockChip`).value;
-      config.mainBlade = document.getElementById(`${prefix}_mainBlade`).value;
       config.assistBlade = document.getElementById(`${prefix}_assistBlade`).value;
-      config.blade = `${config.lockChip} ${config.mainBlade} ${config.assistBlade}`;
+      if (config.cxType === 'over') {
+        config.overBlade = document.getElementById(`${prefix}_overBlade`).value;
+        config.metalBlade = document.getElementById(`${prefix}_metalBlade`).value;
+        config.blade = `${config.lockChip} ${config.metalBlade} ${config.overBlade} ${config.assistBlade}`;
+      } else {
+        config.mainBlade = document.getElementById(`${prefix}_mainBlade`).value;
+        config.blade = `${config.lockChip} ${config.mainBlade} ${config.assistBlade}`;
+      }
     } else if (bladeType) {
       config.blade = document.getElementById(`${prefix}_blade`).value;
     }
@@ -437,7 +537,12 @@ const App = {
     const parts = [];
     if (config.bladeType === 'CX') {
       const ab = (config.assistBlade || '').replace(/（.*?）/g, '');
-      parts.push(`${config.lockChip} ${config.mainBlade} ${ab}`);
+      if (config.cxType === 'over') {
+        const ob = (config.overBlade || '').replace(/（.*?）/g, '');
+        parts.push(`${config.lockChip} ${config.metalBlade} ${ob} ${ab}`);
+      } else {
+        parts.push(`${config.lockChip} ${config.mainBlade} ${ab}`);
+      }
     } else {
       parts.push(config.blade || '?');
     }
@@ -456,7 +561,12 @@ const App = {
 
     if (config.bladeType === 'CX') {
       if (!config.lockChip) return 'Lock Chipを選択してください';
-      if (!config.mainBlade) return 'Main Bladeを選択してください';
+      if (config.cxType === 'over') {
+        if (!config.overBlade) return 'Over Bladeを選択してください';
+        if (!config.metalBlade) return 'Metal Bladeを選択してください';
+      } else {
+        if (!config.mainBlade) return 'Main Bladeを選択してください';
+      }
       if (!config.assistBlade) return 'Assist Bladeを選択してください';
     } else {
       if (!config.blade) return 'Bladeを選択してください';
@@ -483,13 +593,15 @@ const App = {
   validateBeyDuplicates(beys) {
     const NO_DUPLICATE_LOCK_CHIPS = ['ワルキューレ', 'エンペラー'];
     const collected = {
-      blade: [], mainBlade: [], assistBlade: [], lockChip: [], ratchet: [], bit: []
+      blade: [], mainBlade: [], overBlade: [], metalBlade: [], assistBlade: [], lockChip: [], ratchet: [], bit: []
     };
 
     for (const bey of beys) {
       if (!bey) continue;
       if (bey.bladeType === 'CX') {
         if (bey.mainBlade) collected.mainBlade.push(bey.mainBlade);
+        if (bey.overBlade) collected.overBlade.push(bey.overBlade);
+        if (bey.metalBlade) collected.metalBlade.push(bey.metalBlade);
         if (bey.assistBlade) collected.assistBlade.push(bey.assistBlade);
         if (bey.lockChip && NO_DUPLICATE_LOCK_CHIPS.includes(bey.lockChip)) {
           collected.lockChip.push(bey.lockChip);
@@ -502,7 +614,8 @@ const App = {
     }
 
     const labels = {
-      blade: 'Blade', mainBlade: 'Main Blade', assistBlade: 'Assist Blade',
+      blade: 'Blade', mainBlade: 'Main Blade', overBlade: 'Over Blade',
+      metalBlade: 'Metal Blade', assistBlade: 'Assist Blade',
       lockChip: 'Lock Chip', ratchet: 'Ratchet', bit: 'Bit'
     };
 
@@ -523,8 +636,19 @@ const App = {
     this.onBladeTypeChange(prefix);
 
     if (config.bladeType === 'CX') {
+      // cxType ラジオをセット（未定義なら'main'）
+      const cxType = config.cxType || 'main';
+      const radio = document.querySelector(`input[name="${prefix}_cxType"][value="${cxType}"]`);
+      if (radio) radio.checked = true;
+      this.onCxTypeChange(prefix);
+
       document.getElementById(`${prefix}_lockChip`).value = config.lockChip || '';
-      document.getElementById(`${prefix}_mainBlade`).value = config.mainBlade || '';
+      if (cxType === 'over') {
+        document.getElementById(`${prefix}_overBlade`).value = config.overBlade || '';
+        document.getElementById(`${prefix}_metalBlade`).value = config.metalBlade || '';
+      } else {
+        document.getElementById(`${prefix}_mainBlade`).value = config.mainBlade || '';
+      }
       document.getElementById(`${prefix}_assistBlade`).value = config.assistBlade || '';
     } else if (config.blade) {
       document.getElementById(`${prefix}_blade`).value = config.blade;
@@ -667,7 +791,12 @@ const App = {
     let blade = '';
     if (config.bladeType === 'CX') {
       const ab = (config.assistBlade || '').replace(/（.*?）/g, '');
-      blade = [config.lockChip, config.mainBlade, ab].filter(Boolean).join(' ');
+      if (config.cxType === 'over') {
+        const ob = (config.overBlade || '').replace(/（.*?）/g, '');
+        blade = [config.lockChip, config.metalBlade, ob, ab].filter(Boolean).join(' ');
+      } else {
+        blade = [config.lockChip, config.mainBlade, ab].filter(Boolean).join(' ');
+      }
     } else {
       blade = config.blade || '';
     }

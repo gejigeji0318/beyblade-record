@@ -148,7 +148,12 @@ const View = {
     let blade = '';
     if (config.bladeType === 'CX') {
       const ab = (config.assistBlade || '').replace(/（.*?）/g, '');
-      blade = `${config.lockChip || ''} ${config.mainBlade || ''} ${ab}`.trim();
+      if (config.cxType === 'over') {
+        const ob = (config.overBlade || '').replace(/（.*?）/g, '');
+        blade = `${config.lockChip || ''}${config.metalBlade || ''}${ob}${ab}`.trim();
+      } else {
+        blade = `${config.lockChip || ''} ${config.mainBlade || ''} ${ab}`.trim();
+      }
     } else {
       blade = config.blade || '?';
     }

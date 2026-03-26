@@ -31,7 +31,7 @@ const Preset = {
       // パーツ名っぽい名前なのに実パーツと不一致 → 拒否
       const allBladeNames = [
         ...BLADE_DATA.BX, ...BLADE_DATA.UX, ...BLADE_DATA['その他'],
-        ...BLADE_DATA.CX.lockChip
+        ...BLADE_DATA.CX.lockChip, ...BLADE_DATA.CX.overBlade, ...BLADE_DATA.CX.metalBlade
       ];
       const startsWithBlade = allBladeNames.some(b => name.startsWith(b));
       const hasRatchetPattern = /\d-\d+/.test(name) || /Tr$/.test(name) || /Op$/.test(name);
@@ -221,7 +221,12 @@ const Preset = {
     let blade = '';
     if (config.bladeType === 'CX') {
       const ab = (config.assistBlade || '').replace(/（.*?）/g, '');
-      blade = [config.lockChip, config.mainBlade, ab].filter(Boolean).join('');
+      if (config.cxType === 'over') {
+        const ob = (config.overBlade || '').replace(/（.*?）/g, '');
+        blade = [config.lockChip, config.metalBlade, ob, ab].filter(Boolean).join('');
+      } else {
+        blade = [config.lockChip, config.mainBlade, ab].filter(Boolean).join('');
+      }
     } else {
       blade = config.blade || '';
     }

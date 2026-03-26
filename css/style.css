@@ -930,6 +930,19 @@ tbody tr {
   padding: 12px 0;
 }
 
+/* CXサブタイプ選択 */
+.cx-type-row {
+  display: flex;
+  gap: 16px;
+}
+.cx-type-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 /* 選択済みサマリー */
 .bey-selected-summary {
   padding: 8px 12px;

@@ -5,7 +5,9 @@ const App = {
   presetsCache: [],
   presetsListener: null,
   favoritesCache: {},
+  allFavoritesCache: {},
   favoritesListener: null,
+  formUserMap: {},
 
   init() {
     // セッション中に認証済みならスキップ
@@ -63,6 +65,7 @@ const App = {
       btn.classList.toggle('active', btn.textContent === name);
     });
 
+    this.favoritesCache = this.allFavoritesCache[name] || {};
     this.startFavoritesListener();
     this.showScreen('menu');
   },
@@ -92,6 +95,13 @@ const App = {
     }
 
     this.currentScreen = screen;
+
+    // ヘッダー戻るボタンの表示切替（メニュー以外の画面で表示）
+    const backBtn = document.getElementById('headerBackBtn');
+    if (backBtn) {
+      const showBack = screen === 'register' || screen === 'view' || screen === 'preset';
+      backBtn.classList.toggle('hidden', !showBack);
+    }
 
     // 画面固有の初期化
     if (screen === 'register') {
@@ -211,12 +221,19 @@ const App = {
     }, 3000);
   },
 
-  // ベイ構成フォームを生成（noTabs: true でタブなし＝手動入力のみ）
+  // ベイ構成フォームを生成（noTabs: true でタブなし＝手動入力のみ, forUser: ユーザー名でお気に入り切替）
   createBeyForm(containerId, prefix, options) {
     const noTabs = options && options.noTabs;
+    const forUser = options && options.forUser;
+    if (forUser !== undefined) {
+      this.formUserMap[prefix] = forUser;
+    } else if (!this.formUserMap[prefix]) {
+      this.formUserMap[prefix] = this.currentUser;
+    }
     const container = document.getElementById(containerId);
     const presets = this.getPresets();
-    const hasFavs = Object.keys(this.favoritesCache).length > 0;
+    const userFavs = this.getFavoritesForUser(this.formUserMap[prefix]);
+    const hasFavs = Object.keys(userFavs).length > 0;
     const defaultTab = noTabs ? 'manual' : (hasFavs ? 'fav' : 'manual');
 
     container.innerHTML = `
@@ -759,13 +776,14 @@ const App = {
     }
   },
 
-  // 個別フォームのお気に入りボタン描画
+  // 個別フォームのお気に入りボタン描画（プレイヤー別）
   renderFavButtons(prefix) {
     const favList = document.getElementById(`${prefix}_favList`);
     if (!favList) return;
 
+    const user = this.formUserMap[prefix] || this.currentUser;
     const presets = this.getPresets();
-    const favIds = this.favoritesCache;
+    const favIds = this.getFavoritesForUser(user);
     const favs = presets.filter(p => favIds[p.id]);
 
     if (favs.length === 0) {
@@ -812,20 +830,26 @@ const App = {
 
   // --- お気に入り機能 ---
 
-  // Firebaseからお気に入りをリアルタイム取得
+  // Firebaseからお気に入りをリアルタイム取得（全ユーザー）
   startFavoritesListener() {
     if (this.favoritesListener) {
       database.ref('favorites').off('value', this.favoritesListener);
     }
-    if (!this.currentUser) return;
 
-    this.favoritesListener = database.ref('favorites/' + this.currentUser).on('value', snapshot => {
-      this.favoritesCache = snapshot.val() || {};
+    this.favoritesListener = database.ref('favorites').on('value', snapshot => {
+      this.allFavoritesCache = snapshot.val() || {};
+      this.favoritesCache = this.currentUser ? (this.allFavoritesCache[this.currentUser] || {}) : {};
       this.refreshAllPresetSelects();
       if (this.currentScreen === 'preset') {
         Preset.renderList();
       }
     });
+  },
+
+  // 指定ユーザーのお気に入りを取得
+  getFavoritesForUser(user) {
+    if (!user) return this.favoritesCache;
+    return (this.allFavoritesCache[user]) || {};
   },
 
   // お気に入りのON/OFF切り替え

@@ -59,6 +59,34 @@ body {
   color: var(--accent);
 }
 
+.header-menu-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 5px 12px;
+  border-radius: 8px;
+}
+.header-menu-btn:hover {
+  background: rgba(74, 158, 255, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-back-to-setup {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0 0 10px;
+  display: block;
+}
+.btn-back-to-setup:hover {
+  color: var(--accent);
+}
+
 .header-user {
   font-size: 0.9rem;
   color: var(--text-secondary);
@@ -1268,4 +1296,136 @@ tbody tr {
   font-size: 0.85rem;
   color: var(--text-muted);
   text-align: center;
+}
+
+/* 後から入力可ラベル */
+.optional-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+/* バトル中ベイ入力カード */
+.pending-bey-card {
+  background: rgba(74, 158, 255, 0.08);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0;
+}
+.pending-bey-title {
+  font-size: 0.95rem;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+/* 編集モード */
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.edit-select {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  width: 100%;
+}
+.edit-select-sm {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+.edit-round-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.edit-round-row .round-number {
+  min-width: 32px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+.edit-round-row .btn-sm {
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+.edit-bey-info {
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+}
+.edit-bey-player {
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+.edit-bey-item {
+  color: var(--text-muted);
+  padding-left: 4px;
+  line-height: 1.5;
+}
+.edit-round-bey-pair {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0 6px 38px;
+  font-size: 0.8rem;
+}
+.edit-bey-vs {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+.bey-collapse {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.bey-collapse-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.02);
+}
+.bey-collapse-header:hover {
+  background: rgba(74, 158, 255, 0.06);
+}
+.bey-collapse-summary {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bey-collapse-arrow {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.bey-collapse-body {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+.edit-cycle-divider {
+  border-top: 1px dashed var(--accent);
+  color: var(--accent);
+  font-size: 0.75rem;
+  padding: 6px 0 2px;
+  margin-top: 4px;
 }

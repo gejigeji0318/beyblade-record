@@ -58,6 +58,12 @@ const Register = {
     this.teamSelectedWinner = null;
     this.finishPoints = JSON.parse(JSON.stringify(DEFAULT_FINISH_POINTS));
     this.winCondition = DEFAULT_WIN_CONDITION;
+    this._pendingFormCreated = false;
+    this._pendingFormIndex = -1;
+    this._pendingTeamFormCreated = false;
+    this._pendingTeamPlayer = null;
+    this.pendingBeyIndex = -1;
+    this.pendingTeamPlayer = null;
 
     this.renderStadiumSelect();
     this.renderPlayerSelects();
@@ -70,6 +76,51 @@ const Register = {
     document.getElementById('battleProgress').classList.add('hidden');
     document.getElementById('teamBattleProgress').classList.add('hidden');
     document.getElementById('battleResult').classList.add('hidden');
+    document.getElementById('pendingBeyInput').classList.add('hidden');
+    document.getElementById('pendingTeamBeyInput').classList.add('hidden');
+  },
+
+  // バトル画面から設定画面に戻る（進行データはリセット、ベイ構成は保持）
+  backToSetup() {
+    if (this.rounds.length > 0 || this.teamMatches.length > 0) {
+      if (!confirm('バトル進行中です。設定画面に戻るとバトルデータはリセットされます。よろしいですか？')) return;
+    }
+
+    // getBeyConfigの結果にratchetKey/Valueを付与してsetBeyConfig用にする
+    const prepareForSetBey = (config) => {
+      if (!config) return null;
+      const c = { ...config };
+      if (c.ratchetType === 'bitTogether') {
+        c.ratchetKey = c.ratchet;
+        c.ratchetValue = '';
+      } else if (c.ratchet) {
+        const parts = c.ratchet.split('-');
+        c.ratchetKey = parts[0] || '';
+        c.ratchetValue = parts[1] || '';
+      }
+      return c;
+    };
+
+    // 3on3: バトル中に入力されたP2ベイを設定フォームに書き戻す
+    if (this.battleFormat === '3on3' && this.player2Beys) {
+      for (let i = 1; i < 3; i++) {
+        if (this.player2Beys[i]) {
+          App.setBeyConfig(`p2_3on3_${i}`, prepareForSetBey(this.player2Beys[i]));
+        }
+      }
+    }
+
+    // チーム戦: バトル中に入力されたチームBベイを設定フォームに書き戻す
+    if (this.battleType === 'team' && this.teamB) {
+      for (let i = 1; i < this.teamB.length; i++) {
+        const bey = this.teamBeyConfigs[`B:${this.teamB[i]}`];
+        if (bey) {
+          App.setBeyConfig(`team_B_${i}`, prepareForSetBey(bey));
+        }
+      }
+    }
+
+    this.reset();
   },
 
   reset() {
@@ -90,6 +141,12 @@ const Register = {
     this.teamSelectedWinner = null;
     this.finishPoints = JSON.parse(JSON.stringify(DEFAULT_FINISH_POINTS));
     this.winCondition = DEFAULT_WIN_CONDITION;
+    this._pendingFormCreated = false;
+    this._pendingFormIndex = -1;
+    this._pendingTeamFormCreated = false;
+    this._pendingTeamPlayer = null;
+    this.pendingBeyIndex = -1;
+    this.pendingTeamPlayer = null;
 
     // 画面をステップ1に戻す（スタジアム選択済みならステップ2も表示）
     document.getElementById('registerStep1').classList.remove('hidden');
@@ -99,6 +156,8 @@ const Register = {
     document.getElementById('battleProgress').classList.add('hidden');
     document.getElementById('teamBattleProgress').classList.add('hidden');
     document.getElementById('battleResult').classList.add('hidden');
+    document.getElementById('pendingBeyInput').classList.add('hidden');
+    document.getElementById('pendingTeamBeyInput').classList.add('hidden');
   },
 
   // スタジアム選択の描画
@@ -119,8 +178,44 @@ const Register = {
       '<option value="__other__">その他</option>';
     const p1 = document.getElementById('player1Select');
     const p2 = document.getElementById('player2Select');
-    if (p1) p1.innerHTML = p1Options;
-    if (p2) p2.innerHTML = p2Options;
+    if (p1) {
+      p1.innerHTML = p1Options;
+      p1.onchange = () => this.onPlayerSelectChange();
+    }
+    if (p2) {
+      p2.innerHTML = p2Options;
+      p2.onchange = () => this.onPlayerSelectChange();
+    }
+    // 初期値でP1のお気に入りを設定
+    this.onPlayerSelectChange();
+  },
+
+  // プレイヤー選択変更時にベイフォームのお気に入りを更新
+  onPlayerSelectChange() {
+    const p1Name = document.getElementById('player1Select').value;
+    const p2Select = document.getElementById('player2Select');
+    const isOther = p2Select && p2Select.value === '__other__';
+    const p2Name = isOther ? null : (p2Select && p2Select.value) || null;
+
+    // 1on1フォーム
+    if (p1Name) App.formUserMap['p1'] = p1Name;
+    App.formUserMap['p2'] = p2Name || '';
+
+    // 3on3フォーム
+    for (let i = 0; i < 3; i++) {
+      if (p1Name) App.formUserMap[`p1_3on3_${i}`] = p1Name;
+      App.formUserMap[`p2_3on3_${i}`] = p2Name || '';
+    }
+
+    App.refreshAllFavButtons();
+
+    // 「その他」の場合、P2フォームを手動入力タブに切替
+    if (isOther) {
+      App.switchBeyTab('p2', 'manual');
+      for (let i = 0; i < 3; i++) {
+        App.switchBeyTab(`p2_3on3_${i}`, 'manual');
+      }
+    }
   },
 
   // プレイヤー2の名前を取得
@@ -187,14 +282,19 @@ const Register = {
     document.getElementById('player1Bey3on3').classList.toggle('hidden', !is3on3);
     document.getElementById('player2Bey3on3').classList.toggle('hidden', !is3on3);
 
+    const p1Name = document.getElementById('player1Select').value || undefined;
+    const p2Sel = document.getElementById('player2Select');
+    const p2IsOther = p2Sel && p2Sel.value === '__other__';
+    const p2Name = p2IsOther ? '' : ((p2Sel && p2Sel.value) || undefined);
+
     if (is3on3) {
       for (let i = 0; i < 3; i++) {
-        App.createBeyForm(`p1_3on3_${i}_form`, `p1_3on3_${i}`);
-        App.createBeyForm(`p2_3on3_${i}_form`, `p2_3on3_${i}`);
+        App.createBeyForm(`p1_3on3_${i}_form`, `p1_3on3_${i}`, { forUser: p1Name });
+        App.createBeyForm(`p2_3on3_${i}_form`, `p2_3on3_${i}`, { forUser: p2Name });
       }
     } else {
-      App.createBeyForm('player1BeyForm', 'p1');
-      App.createBeyForm('player2BeyForm', 'p2');
+      App.createBeyForm('player1BeyForm', 'p1', { forUser: p1Name });
+      App.createBeyForm('player2BeyForm', 'p2', { forUser: p2Name });
     }
   },
 
@@ -296,21 +396,24 @@ const Register = {
 
     [...this.teamA, ...this.teamB].forEach((user, i) => {
       const team = i < 3 ? 'A' : 'B';
-      const prefix = `team_${team}_${i % 3}`;
+      const memberIdx = i % 3;
+      const prefix = `team_${team}_${memberIdx}`;
+      const optionalLabel = (team === 'B' && memberIdx > 0)
+        ? ' <span class="optional-label">（後から入��可）</span>' : '';
       html += `
         <div class="bey-config">
-          <div class="bey-config-title">${team === 'A' ? 'チームA' : 'チームB'} - ${user}</div>
+          <div class="bey-config-title">${team === 'A' ? 'チームA' : 'チームB'} - ${user}${optionalLabel}</div>
           <div id="${prefix}_form"></div>
         </div>`;
     });
 
     container.innerHTML = html;
 
-    // ベイフォーム初期化
+    // ベイフォーム初期化（各メンバーのお気に入りを表示）
     [...this.teamA, ...this.teamB].forEach((user, i) => {
       const team = i < 3 ? 'A' : 'B';
       const prefix = `team_${team}_${i % 3}`;
-      App.createBeyForm(`${prefix}_form`, prefix);
+      App.createBeyForm(`${prefix}_form`, prefix, { forUser: user });
     });
   },
 
@@ -331,24 +434,46 @@ const Register = {
     }
 
     if (this.battleFormat === '3on3') {
-      // 3on3: 6ベイのバリデーション
+      // 3on3: P1は3ベイ全てバリデーション
       for (let i = 0; i < 3; i++) {
         const err1 = App.validateBeyConfig(`p1_3on3_${i}`);
         if (err1) { App.showToast(`P1 Bey${i + 1}: ${err1}`, 'error'); return; }
-        const err2 = App.validateBeyConfig(`p2_3on3_${i}`);
-        if (err2) { App.showToast(`P2 Bey${i + 1}: ${err2}`, 'error'); return; }
       }
+      // P2はBey①のみ必須、②③は任意（後から入力可）
+      const err2_0 = App.validateBeyConfig(`p2_3on3_0`);
+      if (err2_0) { App.showToast(`P2 Bey1: ${err2_0}`, 'error'); return; }
+
       this.player1Beys = [];
       this.player2Beys = [];
       for (let i = 0; i < 3; i++) {
         this.player1Beys.push(App.getBeyConfig(`p1_3on3_${i}`));
-        this.player2Beys.push(App.getBeyConfig(`p2_3on3_${i}`));
       }
-      // パーツ重複チェック
+      this.player2Beys.push(App.getBeyConfig(`p2_3on3_0`));
+      // P2 Bey②③: 入力済みならバリデーション、未入力ならnull
+      for (let i = 1; i < 3; i++) {
+        const err = App.validateBeyConfig(`p2_3on3_${i}`);
+        if (!err) {
+          this.player2Beys.push(App.getBeyConfig(`p2_3on3_${i}`));
+        } else {
+          // bladeTypeが未選択 = 未入力とみなしnull
+          const bladeType = document.getElementById(`p2_3on3_${i}_bladeType`).value;
+          if (!bladeType) {
+            this.player2Beys.push(null);
+          } else {
+            // 途中まで入力されている場合はエラー表示
+            App.showToast(`P2 Bey${i + 1}: ${err}`, 'error');
+            return;
+          }
+        }
+      }
+      // パーツ重複チェック（P1は全3ベイ、P2は入力済みのもののみ）
       const dupErr1 = App.validateBeyDuplicates(this.player1Beys);
       if (dupErr1) { App.showToast(`${p1Name}: ${dupErr1}`, 'error'); return; }
-      const dupErr2 = App.validateBeyDuplicates(this.player2Beys);
-      if (dupErr2) { App.showToast(`${p2Name}: ${dupErr2}`, 'error'); return; }
+      const p2FilledBeys = this.player2Beys.filter(b => b !== null);
+      if (p2FilledBeys.length > 1) {
+        const dupErr2 = App.validateBeyDuplicates(p2FilledBeys);
+        if (dupErr2) { App.showToast(`${p2Name}: ${dupErr2}`, 'error'); return; }
+      }
       this.player1 = { name: p1Name };
       this.player2 = { name: p2Name };
       this.beyPairIndex = 0;
@@ -382,11 +507,41 @@ const Register = {
 
   // バトルUIの描画
   renderBattleUI() {
+    const pendingEl = document.getElementById('pendingBeyInput');
+
+    // 3on3: P2のベイが未入力の場合、入力フォームを表示
+    if (this.battleFormat === '3on3' && !this.beyFreeSelect &&
+        this.player2Beys[this.beyPairIndex] === null) {
+      pendingEl.classList.remove('hidden');
+      document.getElementById('finishSelect').classList.add('hidden');
+      document.getElementById('pendingBeyTitle').textContent =
+        `${this.player2.name} の Bey${this.beyPairIndex + 1} を入力してください`;
+      this.pendingBeyIndex = this.beyPairIndex;
+      // フォームが未生成の場合のみ生成
+      if (!this._pendingFormCreated || this._pendingFormIndex !== this.beyPairIndex) {
+        App.createBeyForm('pendingBeyForm', 'pending_p2', { forUser: this.player2.name });
+        this._pendingFormCreated = true;
+        this._pendingFormIndex = this.beyPairIndex;
+      }
+      return;
+    }
+    pendingEl.classList.add('hidden');
+
     // 3on3: 現在のベイ対戦表示
     const matchupEl = document.getElementById('currentBeyMatchup');
     const pickerEl = document.getElementById('beyPickerArea');
     if (this.battleFormat === '3on3') {
       if (this.beyFreeSelect) {
+        // 残り1つなら自動選択
+        const availP1 = [0, 1, 2].filter(i => !this.usedBeysP1.includes(i));
+        const availP2 = [0, 1, 2].filter(i => !this.usedBeysP2.includes(i));
+        if (availP1.length === 1 && this.selectedBeyP1 === null) {
+          this.selectedBeyP1 = availP1[0];
+        }
+        if (availP2.length === 1 && this.selectedBeyP2 === null) {
+          this.selectedBeyP2 = availP2[0];
+        }
+
         // 自由選択モード: ベイ対戦表示は選択後のみ、ピッカーはラウンド履歴の下
         matchupEl.classList.toggle('hidden', this.selectedBeyP1 === null || this.selectedBeyP2 === null);
         if (this.selectedBeyP1 !== null && this.selectedBeyP2 !== null) {
@@ -413,10 +568,15 @@ const Register = {
             </div>
           </div>`;
         };
-        pickerEl.classList.remove('hidden');
-        pickerEl.innerHTML =
-          renderBeyPicker(this.player1.name, this.player1Beys, 'p1', this.selectedBeyP1, this.usedBeysP1) +
-          renderBeyPicker(this.player2.name, this.player2Beys, 'p2', this.selectedBeyP2, this.usedBeysP2);
+        // 両方自動選択済みならピッカー非表示
+        if (availP1.length <= 1 && availP2.length <= 1) {
+          pickerEl.classList.add('hidden');
+        } else {
+          pickerEl.classList.remove('hidden');
+          pickerEl.innerHTML =
+            renderBeyPicker(this.player1.name, this.player1Beys, 'p1', this.selectedBeyP1, this.usedBeysP1) +
+            renderBeyPicker(this.player2.name, this.player2Beys, 'p2', this.selectedBeyP2, this.usedBeysP2);
+        }
       } else {
         // 順番通りモード（R1〜R3）
         matchupEl.classList.remove('hidden');
@@ -506,6 +666,26 @@ const Register = {
     this.renderBattleUI();
   },
 
+  // 3on3: バトル中にP2のベイを入力確定
+  submitPendingBey() {
+    const err = App.validateBeyConfig('pending_p2');
+    if (err) { App.showToast(err, 'error'); return; }
+
+    const newBey = App.getBeyConfig('pending_p2');
+    const idx = this.pendingBeyIndex;
+
+    // 既存のP2ベイとの重複チェック
+    const filledBeys = this.player2Beys.filter(b => b !== null);
+    filledBeys.push(newBey);
+    const dupErr = App.validateBeyDuplicates(filledBeys);
+    if (dupErr) { App.showToast(`${this.player2.name}: ${dupErr}`, 'error'); return; }
+
+    this.player2Beys[idx] = newBey;
+    this._pendingFormCreated = false;
+    App.showToast(`${this.player2.name} の Bey${idx + 1} を登録しました`);
+    this.renderBattleUI();
+  },
+
   // 3on3: ラウンドごとのベイ選択
   selectBeyForRound(playerKey, beyIndex) {
     if (playerKey === 'p1') {
@@ -541,24 +721,26 @@ const Register = {
         this.scores.player1 < this.winCondition &&
         this.scores.player2 < this.winCondition) {
       if (this.beyFreeSelect) {
-        // 使用済みベイに追加
+        // 自由選択モード: 使用済みベイに追加
         this.usedBeysP1.push(this.selectedBeyP1);
         this.usedBeysP2.push(this.selectedBeyP2);
-        // 3つ全て使い切ったらリセット（次のサイクル）
+        this.selectedBeyP1 = null;
+        this.selectedBeyP2 = null;
+        // 3つ使い切ったら次のサイクルへリセット
         if (this.usedBeysP1.length >= 3) {
           this.usedBeysP1 = [];
           this.usedBeysP2 = [];
         }
-        this.selectedBeyP1 = null;
-        this.selectedBeyP2 = null;
       } else {
         this.beyPairIndex++;
         if (this.beyPairIndex >= 3) {
-          // 最初のサイクル終了 → 自由選択モードに切替
+          // 1サイクル終了 → 次サイクルへリセットして自由選択モード
           this.beyFreeSelect = true;
           this.selectedBeyP1 = null;
           this.selectedBeyP2 = null;
-          App.showToast('自由選択モード: 各ラウンドでベイを選んでください');
+          this.usedBeysP1 = [];
+          this.usedBeysP2 = [];
+          App.showToast('次のサイクル: ベイを選んでください');
         }
       }
     }
@@ -609,31 +791,54 @@ const Register = {
       return;
     }
 
-    // ベイ構成バリデーション
+    // チームA: 全員バリデーション
     for (let i = 0; i < 3; i++) {
       const errA = App.validateBeyConfig(`team_A_${i}`);
       if (errA) { App.showToast(`チームA ${this.teamA[i]}: ${errA}`, 'error'); return; }
-      const errB = App.validateBeyConfig(`team_B_${i}`);
-      if (errB) { App.showToast(`チームB ${this.teamB[i]}: ${errB}`, 'error'); return; }
     }
+    // チームB: 1人目は必須、2,3人目は任意（後から入力可）
+    const errB0 = App.validateBeyConfig(`team_B_0`);
+    if (errB0) { App.showToast(`チームB ${this.teamB[0]}: ${errB0}`, 'error'); return; }
 
     // ベイ構成を保存（チーム識別付きキーで衝突回避）
     const teamABeys = [];
     const teamBBeys = [];
     for (let i = 0; i < 3; i++) {
       const beyA = App.getBeyConfig(`team_A_${i}`);
-      const beyB = App.getBeyConfig(`team_B_${i}`);
       teamABeys.push(beyA);
-      teamBBeys.push(beyB);
       this.teamBeyConfigs[`A:${this.teamA[i]}`] = beyA;
-      this.teamBeyConfigs[`B:${this.teamB[i]}`] = beyB;
+    }
+    // チームB: 1人目
+    const beyB0 = App.getBeyConfig(`team_B_0`);
+    teamBBeys.push(beyB0);
+    this.teamBeyConfigs[`B:${this.teamB[0]}`] = beyB0;
+    // チームB: 2,3人目は任意
+    for (let i = 1; i < 3; i++) {
+      const errB = App.validateBeyConfig(`team_B_${i}`);
+      if (!errB) {
+        const beyB = App.getBeyConfig(`team_B_${i}`);
+        teamBBeys.push(beyB);
+        this.teamBeyConfigs[`B:${this.teamB[i]}`] = beyB;
+      } else {
+        const bladeType = document.getElementById(`team_B_${i}_bladeType`).value;
+        if (!bladeType) {
+          teamBBeys.push(null);
+          // 未入力 → teamBeyConfigsには登録しない
+        } else {
+          App.showToast(`チームB ${this.teamB[i]}: ${errB}`, 'error');
+          return;
+        }
+      }
     }
 
     // パーツ重複チェック
     const dupErrA = App.validateBeyDuplicates(teamABeys);
     if (dupErrA) { App.showToast(`チームA: ${dupErrA}`, 'error'); return; }
-    const dupErrB = App.validateBeyDuplicates(teamBBeys);
-    if (dupErrB) { App.showToast(`チームB: ${dupErrB}`, 'error'); return; }
+    const teamBFilled = teamBBeys.filter(b => b !== null);
+    if (teamBFilled.length > 1) {
+      const dupErrB = App.validateBeyDuplicates(teamBFilled);
+      if (dupErrB) { App.showToast(`チームB: ${dupErrB}`, 'error'); return; }
+    }
 
     this.teamMatches = [];
     this.currentMatchIndex = 0;
@@ -653,10 +858,52 @@ const Register = {
     this.renderTeamBattleUI();
   },
 
+  // チーム戦: バトル中にチームBのベイを入力確定
+  submitPendingTeamBey() {
+    const err = App.validateBeyConfig('pending_teamB');
+    if (err) { App.showToast(err, 'error'); return; }
+
+    const newBey = App.getBeyConfig('pending_teamB');
+    const player = this.pendingTeamPlayer;
+
+    // 既存のチームBベイとの重複チェック
+    const filledBeys = this.teamB
+      .map(name => this.teamBeyConfigs[`B:${name}`])
+      .filter(b => b != null);
+    filledBeys.push(newBey);
+    const dupErr = App.validateBeyDuplicates(filledBeys);
+    if (dupErr) { App.showToast(`チームB: ${dupErr}`, 'error'); return; }
+
+    this.teamBeyConfigs[`B:${player}`] = newBey;
+    this._pendingTeamFormCreated = false;
+    App.showToast(`${player} のベイを登録しました`);
+    this.renderTeamBattleUI();
+  },
+
   // チーム戦UIの描画
   renderTeamBattleUI() {
     const pA = this.teamCurrentPlayerA;
     const pB = this.teamCurrentPlayerB;
+    const pendingTeamEl = document.getElementById('pendingTeamBeyInput');
+
+    // チームBの現在プレイヤーのベイが未設定の場合、入力フォームを表示
+    if (!this.teamBeyConfigs[`B:${pB}`]) {
+      pendingTeamEl.classList.remove('hidden');
+      document.getElementById('teamFinishSelect').classList.add('hidden');
+      document.getElementById('pendingTeamBeyTitle').textContent =
+        `チームB ${pB} のベイを入力してください`;
+      this.pendingTeamPlayer = pB;
+      if (!this._pendingTeamFormCreated || this._pendingTeamPlayer !== pB) {
+        App.createBeyForm('pendingTeamBeyForm', 'pending_teamB', { forUser: pB });
+        this._pendingTeamFormCreated = true;
+        this._pendingTeamPlayer = pB;
+      }
+      // メンバー状態とマッチタイトルだけ表示
+      document.getElementById('teamMatchTitle').textContent =
+        `マッチ ${this.currentMatchIndex + 1}: ${pA} vs ${pB}`;
+      return;
+    }
+    pendingTeamEl.classList.add('hidden');
 
     // メンバー状態表示
     const statusEl = document.getElementById('teamMemberStatus');

@@ -10,7 +10,10 @@
 
   <!-- ヘッダー -->
   <header class="header">
-    <div class="header-title">BEYBLADE RECORD</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="header-title">BEYBLADE RECORD</div>
+      <button class="header-menu-btn hidden" id="headerBackBtn" onclick="App.showScreen('menu')">メニュー</button>
+    </div>
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="header-user" id="headerUser"></div>
       <button class="btn btn-outline btn-sm hidden" id="changeUserBtn" onclick="App.showScreen('userSelect')">変更</button>
@@ -58,7 +61,6 @@
 
   <!-- ========== 戦績登録画面 ========== -->
   <div id="screenRegister" class="container hidden">
-    <button class="nav-back" onclick="App.showScreen('menu')">← メニューに戻る</button>
 
     <!-- ステップ1: スタジアム選択 -->
     <div class="card" id="registerStep1">
@@ -141,11 +143,11 @@
           <div id="p2_3on3_0_form"></div>
         </div>
         <div class="bey-config">
-          <div class="bey-config-title">プレイヤー2 - Bey②</div>
+          <div class="bey-config-title">プレイヤー2 - Bey② <span class="optional-label">（後から入力可）</span></div>
           <div id="p2_3on3_1_form"></div>
         </div>
         <div class="bey-config">
-          <div class="bey-config-title">プレイヤー2 - Bey③</div>
+          <div class="bey-config-title">プレイヤー2 - Bey③ <span class="optional-label">（後から入力可）</span></div>
           <div id="p2_3on3_2_form"></div>
         </div>
       </div>
@@ -175,6 +177,7 @@
 
     <!-- バトル進行画面（個人戦） -->
     <div class="card hidden" id="battleProgress">
+      <button class="btn-back-to-setup" onclick="Register.backToSetup()">← 設定に戻る</button>
       <div id="currentBeyMatchup" class="bey-matchup hidden"></div>
       <div class="scoreboard" id="scoreboard"></div>
 
@@ -184,6 +187,15 @@
       </div>
 
       <div id="beyPickerArea" class="hidden"></div>
+
+      <!-- バトル中ベイ入力エリア（3on3 P2用） -->
+      <div id="pendingBeyInput" class="hidden">
+        <div class="pending-bey-card">
+          <h3 class="pending-bey-title" id="pendingBeyTitle"></h3>
+          <div id="pendingBeyForm"></div>
+          <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="Register.submitPendingBey()">ベイを確定して次へ</button>
+        </div>
+      </div>
 
       <div id="finishSelect" style="margin-top:16px;">
         <h3 style="font-size:0.95rem;color:var(--text-secondary);margin-bottom:8px;">勝者を選択</h3>
@@ -196,6 +208,7 @@
 
     <!-- バトル進行画面（チーム戦） -->
     <div class="card hidden" id="teamBattleProgress">
+      <button class="btn-back-to-setup" onclick="Register.backToSetup()">← 設定に戻る</button>
       <div id="teamMemberStatus"></div>
       <h2 class="card-title" id="teamMatchTitle"></h2>
       <div class="scoreboard" id="teamScoreboard"></div>
@@ -203,6 +216,15 @@
       <div id="teamRoundHistory">
         <h3 style="font-size:0.95rem;color:var(--text-secondary);margin-bottom:8px;">ラウンド履歴</h3>
         <ul class="round-list" id="teamRoundList"></ul>
+      </div>
+
+      <!-- バトル中ベイ入力エリア（チームB用） -->
+      <div id="pendingTeamBeyInput" class="hidden">
+        <div class="pending-bey-card">
+          <h3 class="pending-bey-title" id="pendingTeamBeyTitle"></h3>
+          <div id="pendingTeamBeyForm"></div>
+          <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="Register.submitPendingTeamBey()">ベイを確定して次へ</button>
+        </div>
       </div>
 
       <div id="teamFinishSelect" style="margin-top:16px;">
@@ -226,7 +248,6 @@
 
   <!-- ========== プリセット管理画面 ========== -->
   <div id="screenPreset" class="container hidden">
-    <button class="nav-back" onclick="App.showScreen('menu')">← メニューに戻る</button>
 
     <!-- プリセット新規登録 -->
     <div class="card">
@@ -251,7 +272,6 @@
 
   <!-- ========== 戦績閲覧画面 ========== -->
   <div id="screenView" class="container hidden">
-    <button class="nav-back" onclick="App.showScreen('menu')">← メニューに戻る</button>
 
     <!-- フィルター -->
     <div class="card">

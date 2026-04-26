@@ -355,19 +355,21 @@ const App = {
         </div>
 
         <!-- Ratchet選択 -->
-        <div class="form-group">
-          <label>Ratchet刃数</label>
-          <select id="${prefix}_ratchetKey" onchange="App.onRatchetKeyChange('${prefix}')">
-            <option value="">選択してください</option>
-            ${Object.keys(RATCHET_DATA.simpleRatchet).map(k => `<option value="${k}">${k}</option>`).join('')}
-            ${RATCHET_DATA.bitTogether.map(v => `<option value="${v}">${v}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group hidden" id="${prefix}_ratchetValueWrap">
-          <label>Ratchet高さ</label>
-          <select id="${prefix}_ratchetValue">
-            <option value="">先に番号を選択</option>
-          </select>
+        <div id="${prefix}_ratchetSection">
+          <div class="form-group">
+            <label>Ratchet刃数</label>
+            <select id="${prefix}_ratchetKey" onchange="App.onRatchetKeyChange('${prefix}')">
+              <option value="">選択してください</option>
+              ${Object.keys(RATCHET_DATA.simpleRatchet).map(k => `<option value="${k}">${k}</option>`).join('')}
+              ${RATCHET_DATA.bitTogether.map(v => `<option value="${v}">${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group hidden" id="${prefix}_ratchetValueWrap">
+            <label>Ratchet高さ</label>
+            <select id="${prefix}_ratchetValue">
+              <option value="">先に番号を選択</option>
+            </select>
+          </div>
         </div>
 
         <!-- Bit選択 -->
@@ -436,15 +438,31 @@ const App = {
 
   // ブレード固有のラチェット制限（値が5で終わるもののみ）
   RATCHET_RESTRICTED_BLADES: ['クロックミラージュ'],
+  // ラチェットを装着できないブレード（セクションごと非表示）
+  RATCHET_DISABLED_BLADES: ['バレットグリフォン'],
 
   isRatchetRestricted(prefix) {
     return this.RATCHET_RESTRICTED_BLADES.includes(this.getSelectedBlade(prefix));
+  },
+
+  isRatchetDisabled(prefix) {
+    return this.RATCHET_DISABLED_BLADES.includes(this.getSelectedBlade(prefix));
   },
 
   // ブレード制限に応じてRatchet刃数ドロップダウンを更新
   refreshRatchetKeys(prefix) {
     const keySelect = document.getElementById(`${prefix}_ratchetKey`);
     if (!keySelect) return;
+    const section = document.getElementById(`${prefix}_ratchetSection`);
+    const disabled = this.isRatchetDisabled(prefix);
+
+    if (section) section.classList.toggle('hidden', disabled);
+    if (disabled) {
+      keySelect.value = '';
+      this.onRatchetKeyChange(prefix);
+      return;
+    }
+
     const current = keySelect.value;
     const restricted = this.isRatchetRestricted(prefix);
 
@@ -499,6 +517,7 @@ const App = {
     const bladeType = document.getElementById(`${prefix}_bladeType`).value;
     const ratchetKey = document.getElementById(`${prefix}_ratchetKey`).value;
     const isBitTogether = RATCHET_DATA.bitTogether.includes(ratchetKey);
+    const ratchetDisabled = this.isRatchetDisabled(prefix);
 
     const config = {
       bladeType: bladeType,
@@ -509,7 +528,7 @@ const App = {
       metalBlade: null,
       assistBlade: null,
       cxType: null,
-      ratchetType: isBitTogether ? 'bitTogether' : 'simpleRatchet',
+      ratchetType: ratchetDisabled ? 'none' : (isBitTogether ? 'bitTogether' : 'simpleRatchet'),
       ratchet: null,
       bit: null
     };
@@ -563,7 +582,9 @@ const App = {
     } else {
       parts.push(config.blade || '?');
     }
-    parts.push(config.ratchet || '?');
+    if (config.ratchetType !== 'none') {
+      parts.push(config.ratchet || '?');
+    }
     if (config.bit) {
       parts.push(config.bit);
     }
@@ -591,6 +612,11 @@ const App = {
       if (bladeList && !bladeList.includes(config.blade)) {
         return `「${config.blade}」はBladeリストに存在しません`;
       }
+    }
+
+    if (this.isRatchetDisabled(prefix)) {
+      if (!config.bit) return 'Bitを選択してください';
+      return null;
     }
 
     const ratchetKey = document.getElementById(`${prefix}_ratchetKey`).value;
@@ -670,6 +696,9 @@ const App = {
     } else if (config.blade) {
       document.getElementById(`${prefix}_blade`).value = config.blade;
     }
+
+    // ブレード固有のラチェット制限・無効化を反映（セクション表示切替）
+    this.refreshRatchetKeys(prefix);
 
     // ratchetKey → onRatchetKeyChange で高さオプション生成
     document.getElementById(`${prefix}_ratchetKey`).value = config.ratchetKey || '';

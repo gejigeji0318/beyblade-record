@@ -64,6 +64,10 @@ const Register = {
     this._pendingTeamPlayer = null;
     this.pendingBeyIndex = -1;
     this.pendingTeamPlayer = null;
+    this._saving = false;
+    this._saved = false;
+    const saveBtn = document.getElementById('saveBattleBtn');
+    if (saveBtn) saveBtn.disabled = false;
 
     this.renderStadiumSelect();
     this.renderPlayerSelects();
@@ -147,6 +151,10 @@ const Register = {
     this._pendingTeamPlayer = null;
     this.pendingBeyIndex = -1;
     this.pendingTeamPlayer = null;
+    this._saving = false;
+    this._saved = false;
+    const saveBtn = document.getElementById('saveBattleBtn');
+    if (saveBtn) saveBtn.disabled = false;
 
     // 画面をステップ1に戻す（スタジアム選択済みならステップ2も表示）
     document.getElementById('registerStep1').classList.remove('hidden');
@@ -1076,6 +1084,22 @@ const Register = {
 
   // 結果をFirebaseに保存
   saveBattle() {
+    if (this._saving || this._saved) return;
+    this._saving = true;
+    const saveBtn = document.getElementById('saveBattleBtn');
+    if (saveBtn) saveBtn.disabled = true;
+
+    const onSuccess = (msg) => {
+      this._saving = false;
+      this._saved = true;
+      App.showToast(msg);
+    };
+    const onError = (err) => {
+      this._saving = false;
+      if (saveBtn) saveBtn.disabled = false;
+      App.showToast('保存に失敗しました: ' + err.message, 'error');
+    };
+
     const battleId = Date.now().toString();
 
     if (this.battleType === 'individual') {
@@ -1104,12 +1128,8 @@ const Register = {
       };
 
       database.ref('battles/' + battleId).set(data)
-        .then(() => {
-          App.showToast('戦績を保存しました！');
-        })
-        .catch(err => {
-          App.showToast('保存に失敗しました: ' + err.message, 'error');
-        });
+        .then(() => onSuccess('戦績を保存しました！'))
+        .catch(onError);
     } else {
       const winnerTeam = this.teamARemaining.length > 0 ? 'A' : 'B';
       const data = {
@@ -1124,12 +1144,8 @@ const Register = {
       };
 
       database.ref('battles/' + battleId).set(data)
-        .then(() => {
-          App.showToast('チーム戦の戦績を保存しました！');
-        })
-        .catch(err => {
-          App.showToast('保存に失敗しました: ' + err.message, 'error');
-        });
+        .then(() => onSuccess('チーム戦の戦績を保存しました！'))
+        .catch(onError);
     }
   }
 };
